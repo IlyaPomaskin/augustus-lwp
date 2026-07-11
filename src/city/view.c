@@ -5,6 +5,7 @@
 #include "core/config.h"
 #include "core/direction.h"
 #include "editor/editor.h"
+#include "game/game.h"
 #include "graphics/menu.h"
 #include "graphics/renderer.h"
 #include "map/grid.h"
@@ -600,11 +601,18 @@ static void set_viewport_without_sidebar(void)
     set_viewport(0, TOP_MENU_HEIGHT, data.screen_width - 40, data.screen_height - TOP_MENU_HEIGHT);
 }
 
+static void set_viewport_wallpaper(void)
+{
+    set_viewport(0, 0, data.screen_width, data.screen_height);
+}
+
 void city_view_set_scale(int scale)
 {
     scale = calc_bound(scale, 50, city_view_get_max_scale());
     data.scale = scale;
-    if (data.sidebar_collapsed) {
+    if (game_wallpaper_mode()) {
+        set_viewport_wallpaper();
+    } else if (data.sidebar_collapsed) {
         set_viewport_without_sidebar();
     } else {
         set_viewport_with_sidebar();
@@ -617,7 +625,9 @@ void city_view_set_viewport(int screen_width, int screen_height)
 {
     data.screen_width = screen_width;
     data.screen_height = screen_height;
-    if (data.sidebar_collapsed) {
+    if (game_wallpaper_mode()) {
+        set_viewport_wallpaper();
+    } else if (data.sidebar_collapsed) {
         set_viewport_without_sidebar();
     } else {
         set_viewport_with_sidebar();
