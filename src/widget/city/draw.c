@@ -1274,7 +1274,7 @@ static int get_highlighted_formation_id(const map_tile *tile)
 static void update_clouds(void)
 {
     int camera_x, camera_y;
-    if (game_state_is_paused() || (!window_is(WINDOW_CITY) && !window_is(WINDOW_CITY_MILITARY))) {
+    if (game_state_is_paused() || (!window_is(WINDOW_CITY) && !window_is(WINDOW_CITY_MILITARY) && !window_is(WINDOW_CITY_WALLPAPER))) {
         clouds_pause();
     }
     city_view_get_camera_in_pixels(&camera_x, &camera_y);
