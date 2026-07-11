@@ -43,9 +43,14 @@
         </service>
 
         <activity
-            android:name=".DirectorySelectionActivity"
+            android:name=".AssetSelectionActivity"
             android:exported="true"
-            android:theme="@style/Theme.AppCompat.NoActionBar" />
+            android:theme="@style/Theme.AppCompat.NoActionBar">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
 
         <!-- Support for Samsung DeX -->
         <meta-data

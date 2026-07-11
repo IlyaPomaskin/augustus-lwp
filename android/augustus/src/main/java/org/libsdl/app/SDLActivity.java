@@ -216,6 +216,27 @@ public class SDLActivity extends WallpaperService implements View.OnSystemUiVisi
     public static final int WALLPAPER_EVENT_UPDATE_CONFIGS = 1;
     public static final int WALLPAPER_EVENT_RESIZE_DISPLAY = 2;
 
+    // Live-wallpaper pause state. When the wallpaper is hidden, native posts COMMAND_PAUSE_NOW back
+    // to Java (see augustus.c WALLPAPER_EVENT_HIDE handler); onUnhandledMessage() then pauses the SDL
+    // thread unless the wallpaper became visible again in the meantime (mirrors h2lwp). sdlPaused
+    // guards nativePause()/nativeResume() so they stay balanced.
+    protected static boolean lwpVisible = true;
+    protected static boolean sdlPaused;
+
+    protected static void pauseSdl() {
+        if (!sdlPaused) {
+            nativePause();
+            sdlPaused = true;
+        }
+    }
+
+    protected static void resumeSdl() {
+        if (sdlPaused) {
+            nativeResume();
+            sdlPaused = false;
+        }
+    }
+
     // Main components
     protected static SDLActivity mSingleton;
     protected static SDLSurface mSurface;
@@ -316,6 +337,8 @@ public class SDLActivity extends WallpaperService implements View.OnSystemUiVisi
         mHasFocus = true;
         mNextNativeState = NativeState.INIT;
         mCurrentNativeState = NativeState.INIT;
+        lwpVisible = true;
+        sdlPaused = false;
     }
     
     protected SDLSurface createSDLSurface(Context context) {
@@ -627,10 +650,12 @@ public class SDLActivity extends WallpaperService implements View.OnSystemUiVisi
         @Override
         public void onVisibilityChanged(boolean isVisible) {
             Log.v(TAG, "Engine onVisibilityChanged " + isVisible);
+            SDLActivity.lwpVisible = isVisible;
             if (SDLActivity.mBrokenLibraries) {
                 return;
             }
             if (isVisible) {
+                SDLActivity.resumeSdl();
                 pushWallpaperEvent(WALLPAPER_EVENT_UPDATE_CONFIGS);
             } else {
                 pushWallpaperEvent(WALLPAPER_EVENT_HIDE);
@@ -702,6 +727,9 @@ public class SDLActivity extends WallpaperService implements View.OnSystemUiVisi
     static final int COMMAND_SET_KEEP_SCREEN_ON = 5;
 
     protected static final int COMMAND_USER = 0x8000;
+    // Sent by native (augustus.c) when the wallpaper is hidden. Must match the value passed to
+    // SDL_AndroidSendMessage() there: 0x8000 + 1.
+    protected static final int COMMAND_PAUSE_NOW = COMMAND_USER + 1;
 
     protected static boolean mFullscreenModeActive;
 
@@ -714,6 +742,14 @@ public class SDLActivity extends WallpaperService implements View.OnSystemUiVisi
      * @return if the message was handled in overridden method.
      */
     protected boolean onUnhandledMessage(int command, Object param) {
+        if (command == COMMAND_PAUSE_NOW) {
+            // Only actually pause if the wallpaper is still hidden; it may have become visible again
+            // between native posting this and the message being handled.
+            if (!lwpVisible) {
+                pauseSdl();
+            }
+            return true;
+        }
         return false;
     }
 

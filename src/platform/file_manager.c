@@ -439,9 +439,12 @@ int platform_file_manager_list_directory_contents(
 
 int platform_file_manager_should_case_correct_file(void)
 {
-#if defined(_WIN32) || defined(__ANDROID__)
+#if defined(_WIN32)
     return 0;
 #else
+    // Android now reads C3 data from a case-sensitive internal-storage filesystem via plain POSIX
+    // I/O (no SAF, which used to do case-insensitive matching in Java), so case correction is needed
+    // there just like on Linux to resolve mixed-case original C3 filenames (e.g. C3.eng, C3.sg2).
     return 1;
 #endif
 }

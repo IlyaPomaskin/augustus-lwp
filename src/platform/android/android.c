@@ -8,30 +8,53 @@
 
 #include "SDL.h"
 
+#include <dirent.h>
+#include <errno.h>
+#include <fcntl.h>
 #include <string.h>
+#include <sys/stat.h>
+#include <unistd.h>
 
 #define ANDROID_BASELINE_DPI 160.0f
 #define DEFAULT_SCREEN_DENSITY 1.0f
 
+// Subdirectory of the app's internal files dir where AssetSelectionActivity copies the C3 data.
+#define C3_DATA_SUBDIR "c3"
+// Sentinel returned to platform_file_manager_create_directory when the directory already exists.
+#define ANDROID_DIRECTORY_EXISTS (-1)
+
 static int has_directory;
-static char path[FILE_NAME_MAX];
+static char base_path[FILE_NAME_MAX];
+
+// New data model (2026-07-12): the wallpaper reads C3 data from plain internal storage using
+// standard POSIX file I/O against base_path, NOT via SAF/ContentResolver. Every relative path
+// coming from the engine is resolved under base_path (the internal .../files/c3 directory).
+static void build_internal_path(char *dest, const char *filename)
+{
+    if (filename[0] == '.' && (filename[1] == '/' || filename[1] == '\\')) {
+        filename += 2;
+    }
+    if (filename[0] == '/') {
+        snprintf(dest, FILE_NAME_MAX, "%s", filename);
+    } else {
+        snprintf(dest, FILE_NAME_MAX, "%s/%s", base_path, filename);
+    }
+    for (char *c = dest; *c; c++) {
+        if (*c == '\\') {
+            *c = '/';
+        }
+    }
+}
 
 const char *android_get_c3_path(void)
 {
-    jni_function_handler handler;
-    if (!jni_get_static_method_handler(CLASS_FILE_MANAGER, "getC3Path", "()Ljava/lang/String;", &handler)) {
-        jni_destroy_function_handler(&handler);
+    static char c3_path[FILE_NAME_MAX];
+    const char *internal_storage = SDL_AndroidGetInternalStoragePath();
+    if (!internal_storage) {
         return NULL;
     }
-
-    jobject result = (*handler.env)->CallStaticObjectMethod(handler.env, handler.class, handler.method);
-    const char *temp_path = (*handler.env)->GetStringUTFChars(handler.env, (jstring) result, NULL);
-    snprintf(path, FILE_NAME_MAX, "%s", temp_path);
-    (*handler.env)->ReleaseStringUTFChars(handler.env, (jstring) result, temp_path);
-    (*handler.env)->DeleteLocalRef(handler.env, result);
-    jni_destroy_function_handler(&handler);
-
-    return *path ? path : NULL;
+    snprintf(c3_path, FILE_NAME_MAX, "%s/%s", internal_storage, C3_DATA_SUBDIR);
+    return c3_path;
 }
 
 int android_has_c3_path(void)
@@ -41,12 +64,14 @@ int android_has_c3_path(void)
 
 int android_show_c3_path_dialog(int again)
 {
-    (void) again;
-    // The SAF folder-grant dialog lived on the deleted AugustusMainActivity. Under the current
-    // data model the wallpaper reads C3 data copied to internal storage by AssetSelectionActivity
-    // (see Task 6); this legacy grant flow is retired, so this is a no-op stub.
-    has_directory = 0;
-    return 0;
+    // New data model: C3 data is copied to internal storage by AssetSelectionActivity, so there is
+    // no runtime SAF folder-grant dialog. Report the data path as available on the first request;
+    // on a retry (pre-init could not load C3 files there) stop, so pre_init doesn't spin forever.
+    if (again) {
+        return 0;
+    }
+    has_directory = 1;
+    return 1;
 }
 
 float android_get_screen_density(void)
@@ -60,22 +85,22 @@ float android_get_screen_density(void)
 
 int android_get_file_descriptor(const char *filename, const char *mode)
 {
-    int result = 0;
-    jni_function_handler handler;
-    if (!jni_get_static_method_handler(CLASS_FILE_MANAGER, "openFileDescriptor",
-        "(L" CLASS_CONTEXT ";Ljava/lang/String;Ljava/lang/String;)I", &handler)) {
-        jni_destroy_function_handler(&handler);
+    if (!*base_path || !filename) {
         return 0;
     }
-    jstring jfilename = (*handler.env)->NewStringUTF(handler.env, filename);
-    jstring jmode = (*handler.env)->NewStringUTF(handler.env, mode);
-    result = (int) (*handler.env)->CallStaticIntMethod(
-        handler.env, handler.class, handler.method, handler.activity, jfilename, jmode);
-    (*handler.env)->DeleteLocalRef(handler.env, jfilename);
-    (*handler.env)->DeleteLocalRef(handler.env, jmode);
-    jni_destroy_function_handler(&handler);
+    char full_path[FILE_NAME_MAX];
+    build_internal_path(full_path, filename);
 
-    return result;
+    int flags;
+    if (strchr(mode, 'a')) {
+        flags = O_WRONLY | O_CREAT | O_APPEND;
+    } else if (strchr(mode, 'w')) {
+        flags = O_WRONLY | O_CREAT | O_TRUNC;
+    } else {
+        flags = O_RDONLY;
+    }
+    int fd = open(full_path, flags, 0644);
+    return fd < 0 ? 0 : fd;
 }
 
 void *android_open_asset(const char *asset, const char *mode)
@@ -85,18 +110,11 @@ void *android_open_asset(const char *asset, const char *mode)
 
 int android_set_base_path(const char *path)
 {
-    int result = 0;
-    jni_function_handler handler;
-    if (!jni_get_static_method_handler(CLASS_FILE_MANAGER, "setBaseUri", "(Ljava/lang/String;)I", &handler)) {
-        jni_destroy_function_handler(&handler);
+    if (!path || !*path) {
         return 0;
     }
-    jstring jpath = (*handler.env)->NewStringUTF(handler.env, path);
-    result = (int) (*handler.env)->CallStaticIntMethod(handler.env, handler.class, handler.method, jpath);
-    (*handler.env)->DeleteLocalRef(handler.env, jpath);
-    jni_destroy_function_handler(&handler);
-
-    return result;
+    snprintf(base_path, FILE_NAME_MAX, "%s", path);
+    return 1;
 }
 
 int android_get_directory_contents(const char *dir, int type, const char *extension, int (*callback)(const char *, long))
@@ -104,94 +122,72 @@ int android_get_directory_contents(const char *dir, int type, const char *extens
     if (strncmp(dir, ASSETS_DIRECTORY, strlen(ASSETS_DIRECTORY)) == 0) {
         return asset_handler_get_directory_contents(dir + strlen(ASSETS_DIRECTORY), type, extension, callback);
     }
-    jni_function_handler handler;
-    jni_function_handler get_name;
-    jni_function_handler get_last_modified_time;
-
-    if (!jni_get_static_method_handler(CLASS_FILE_MANAGER, "getDirectoryFileList",
-        "(L" CLASS_CONTEXT ";Ljava/lang/String;ILjava/lang/String;)[L" CLASS_FILE_MANAGER "$FileInfo;",
-        &handler)) {
-        jni_destroy_function_handler(&handler);
+    if (!*base_path) {
         return LIST_ERROR;
     }
-    if (!jni_get_method_handler(CLASS_FILE_MANAGER "$FileInfo", "getName", "()Ljava/lang/String;", &get_name)) {
-        jni_destroy_function_handler(&get_name);
-        jni_destroy_function_handler(&handler);
+    char full_dir[FILE_NAME_MAX];
+    build_internal_path(full_dir, dir);
+    DIR *d = opendir(full_dir);
+    if (!d) {
         return LIST_ERROR;
     }
-    if (!jni_get_method_handler(CLASS_FILE_MANAGER "$FileInfo", "getModifiedTime", "()J", &get_last_modified_time)) {
-        jni_destroy_function_handler(&get_last_modified_time);
-        jni_destroy_function_handler(&get_name);
-        jni_destroy_function_handler(&handler);
-        return LIST_ERROR;
-    }
-
-    jstring jdir = (*handler.env)->NewStringUTF(handler.env, dir);
-    jstring jextension = (*handler.env)->NewStringUTF(handler.env, extension);
-    jobjectArray result = (jobjectArray) (*handler.env)->CallStaticObjectMethod(
-        handler.env, handler.class, handler.method, handler.activity, jdir, type, jextension);
-    (*handler.env)->DeleteLocalRef(handler.env, jdir);
-    (*handler.env)->DeleteLocalRef(handler.env, jextension);
     int match = LIST_NO_MATCH;
-    int len = (*handler.env)->GetArrayLength(handler.env, result);
-    for (int i = 0; i < len; ++i) {
-        jobject jfile_info = (jobject) (*handler.env)->GetObjectArrayElement(handler.env, result, i);
-        jstring jfilename = (jstring) (*handler.env)->CallObjectMethod(handler.env, jfile_info, get_name.method);
-        const char *filename = (*handler.env)->GetStringUTFChars(handler.env, jfilename, NULL);
-        long last_modified = (long) (*handler.env)->CallLongMethod(handler.env, jfile_info,
-            get_last_modified_time.method);
-        match = callback(filename, last_modified);
-        (*handler.env)->ReleaseStringUTFChars(handler.env, (jstring) jfilename, filename);
-        (*handler.env)->DeleteLocalRef(handler.env, jfilename);
-        (*handler.env)->DeleteLocalRef(handler.env, jfile_info);
+    struct dirent *entry;
+    struct stat file_info;
+    char entry_path[FILE_NAME_MAX];
+    while ((entry = readdir(d)) != 0) {
+        const char *name = entry->d_name;
+        snprintf(entry_path, FILE_NAME_MAX, "%s/%s", full_dir, name);
+        if (stat(entry_path, &file_info) == -1) {
+            continue;
+        }
+        int mode = file_info.st_mode;
+        int is_regular_file = S_ISREG(mode) || S_ISLNK(mode);
+        if ((!(type & TYPE_FILE) && is_regular_file) ||
+            (!(type & TYPE_DIR) && S_ISDIR(mode)) ||
+            S_ISCHR(mode) || S_ISBLK(mode) || S_ISFIFO(mode) || S_ISSOCK(mode)) {
+            continue;
+        }
+        if (is_regular_file && !file_has_extension(name, extension)) {
+            continue;
+        }
+        if ((type & TYPE_DIR) && name[0] == '.') {
+            // Skip current (.), parent (..) and hidden directories (.*)
+            continue;
+        }
+        match = callback(name, (long) file_info.st_mtime);
         if (match == LIST_MATCH) {
             break;
         }
     }
-    (*handler.env)->DeleteLocalRef(handler.env, result);
-    jni_destroy_function_handler(&get_last_modified_time);
-    jni_destroy_function_handler(&get_name);
-    jni_destroy_function_handler(&handler);
+    closedir(d);
     return match;
 }
 
 int android_create_directory(const char *name)
 {
-    int result = 0;
-    jni_function_handler handler;
-    if (!jni_get_static_method_handler(CLASS_FILE_MANAGER, "createFolder",
-        "(L" CLASS_CONTEXT ";Ljava/lang/String;)I", &handler)) {
-        jni_destroy_function_handler(&handler);
+    if (!*base_path) {
         return 0;
     }
-    jstring jname = (*handler.env)->NewStringUTF(handler.env, name);
-    result = (int) (*handler.env)->CallStaticIntMethod(
-        handler.env, handler.class, handler.method, handler.activity, jname);
-    (*handler.env)->DeleteLocalRef(handler.env, jname);
-    jni_destroy_function_handler(&handler);
-
-    return result;
+    char full_path[FILE_NAME_MAX];
+    build_internal_path(full_path, name);
+    if (mkdir(full_path, 0755) == 0) {
+        return 1;
+    }
+    return errno == EEXIST ? ANDROID_DIRECTORY_EXISTS : 0;
 }
 
 int android_remove_file(const char *filename)
 {
-    int result = 0;
-    jni_function_handler handler;
-    if (!jni_get_static_method_handler(CLASS_FILE_MANAGER, "deleteFile",
-        "(L" CLASS_CONTEXT ";Ljava/lang/String;)Z", &handler)) {
-        jni_destroy_function_handler(&handler);
+    if (!*base_path) {
         return 0;
     }
-    jstring jfilename = (*handler.env)->NewStringUTF(handler.env, filename);
-    result = (int) (*handler.env)->CallStaticBooleanMethod(
-        handler.env, handler.class, handler.method, handler.activity, jfilename);
-    (*handler.env)->DeleteLocalRef(handler.env, jfilename);
-    jni_destroy_function_handler(&handler);
-
-    return result;
+    char full_path[FILE_NAME_MAX];
+    build_internal_path(full_path, filename);
+    return remove(full_path) == 0;
 }
 
-JNIEXPORT void JNICALL Java_com_github_Keriew_augustus_DirectorySelectionActivity_gotDirectory(JNIEnv *env, jobject thiz)
+JNIEXPORT void JNICALL Java_com_github_Keriew_augustus_AssetSelectionActivity_gotDirectory(JNIEnv *env, jobject thiz)
 {
     has_directory = 1;
 }

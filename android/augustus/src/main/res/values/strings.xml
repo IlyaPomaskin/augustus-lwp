@@ -1,6 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Augustus</string>
-    <string name="directory_selector_instructions">"Augustus requires the original Caesar 3 files to run. Please follow these steps:\n\n1. Copy your entire Caesar 3 folder from your computer to your Android device using Android File Transfer or a similar utility.\nAlternatively, if you bought the game from GOG: you can use the app \"Inno Setup Extractor\" to extract the offline installer on your device.\n\n2. Select that directory using the button below. This is also the directory where any saved games will be stored."</string>
-    <string name="directory_selector_button">Select directory</string>
+    <string name="app_name">Augustus Wallpaper</string>
+    <string name="asset_selector_instructions">"Augustus Live Wallpaper needs the original Caesar 3 files. Copy your Caesar 3 folder to this device, then tap the button below to select it. The files are copied into the app\'s private storage so the wallpaper can read them.\n\nAfter the copy finishes, set Augustus as your live wallpaper from your launcher\'s wallpaper picker."</string>
+    <string name="asset_selector_button">Select Caesar III folder</string>
+    <string name="asset_status_missing">Caesar 3 files not yet installed.</string>
+    <string name="asset_status_copying">Copying Caesar 3 files…</string>
+    <string name="asset_status_ready">Caesar 3 files installed. Ready to use as a live wallpaper.</string>
+    <string name="asset_status_error">Copy failed: %1$s</string>
 </resources>
