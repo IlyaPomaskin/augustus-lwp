@@ -688,6 +688,11 @@ static void setup(const augustus_args *args)
         system_hide_cursor();
     }
 
+    // wallpaper mode is non-interactive: never show a cursor over the map
+    if (args->wallpaper) {
+        system_hide_cursor();
+    }
+
     time_set_millis(system_get_ticks());
 
     int result;

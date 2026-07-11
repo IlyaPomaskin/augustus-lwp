@@ -197,7 +197,7 @@ int game_init_wallpaper(void)
     model_reset();
     building_properties_init();
     load_augustus_messages();
-    sound_system_init();
+    // wallpaper mode is silent: skip audio init so every sound_device_* call no-ops (device stays uninitialized)
     game_state_init();
     resource_init();
 
