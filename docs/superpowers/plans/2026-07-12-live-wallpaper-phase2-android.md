@@ -535,6 +535,60 @@ Re-select the wallpaper; the `onCreateEngine` `killProcess` guard restarts the s
 
 ---
 
+## Amendment — 2026-07-12 (data model + Task 3/4/5/6 reconciliation)
+
+Adopted after Tasks 1–4 landed (builds green, reviews clean/Approved).
+
+**Data model changed (supersedes §E's SAF-from-service approach; spec §E updated).**
+The wallpaper no longer reads C3 data over SAF at runtime. A simple
+**`AssetSelectionActivity`** (launchable + the wallpaper's `settingsActivity`)
+does a one-time `ACTION_OPEN_DOCUMENT_TREE` pick and **copies the C3 data into
+internal app storage** (`getFilesDir()/c3/`) from an activity context; the
+service reads plain files from there. This **eliminates the SAF-from-service
+risk** and matches h2lwp's own `extractAssets` model. Consequences: the runtime
+`FileManager` SAF read path is **unused in wallpaper mode**; the native Android
+data dir resolves to the internal path.
+
+**Tasks 3+4 were combined and completed** (commits `938622bde`, `2ea9de9f7`);
+the reviewer produced a verified C-side reconciliation checklist now folded into
+the revised Task 5 below.
+
+**Revised Task 5 — Native JNI event bridge + JNI-contract reconciliation.**
+(a) Add `Java_org_libsdl_app_SDLActivity_pushWallpaperEvent(env,cls,jint)` →
+`SDL_USEREVENT`; handle it in Augustus's existing event loop: `HIDE` →
+`city_view_go_to_random_tile()` + (Android) `SDL_AndroidSendMessage(COMMAND_PAUSE_NOW,0)`;
+`RESIZE_DISPLAY`/`UPDATE_CONFIGS` no-op in Phase 2. `LIVE_WALLPAPER_EVENT_*=0/1/2`
+matches the Java constants. Guard `SDL_AndroidSendMessage` with `#ifdef __ANDROID__`;
+desktop regression build must stay clean.
+(b) Reconcile the JNI contract broken by deleting `AugustusMainActivity`
+(reviewer's verified list): `jni.h:15` `CLASS_AUGUSTUS_ACTIVITY` points at the
+deleted class — **split** it (FileManager param-type descriptor →
+`android/content/Context`; instance-method host → a live class); fix the
+`FileManager` JNI signature strings in `android.c` (`openFileDescriptor:68`,
+`getDirectoryFileList:114`, `createFolder:165`, `deleteFile:183`) to
+`Landroid/content/Context;` first param; `getScreenDensity` (`android.c:56`) —
+reimplement via the static `getDisplayDPI()` or accept the `1.0f` fallback and
+note it; the old `showDirectorySelection` SAF trigger (`android.c:42`) is
+**obsolete** under the new data model — make it a safe no-op (the grant now
+happens in `AssetSelectionActivity`, Task 6). Everything must compile + link;
+no code path may `FindClass` the deleted class.
+
+**Revised Task 6 — Asset-selection activity + copy-to-internal-storage + native
+data path + bundled save.** Create `AssetSelectionActivity` (SAF pick → copy tree
+to `getFilesDir()/c3/` off the UI thread, persist a ready flag); wire it as
+launcher + `settingsActivity` (replacing `DirectorySelectionActivity`); point the
+Android data dir at `getFilesDir()/c3/` so the engine reads via plain file I/O;
+place the APK-bundled `wallpaper.svx` into the internal savegame location.
+Reference h2lwp's `ToolsetActivity.extractAssets` for the copy pattern. Build.
+
+**Task 7 (device QA) unchanged**, except the data-grant step is "launch
+AssetSelectionActivity, pick the C3 folder, wait for copy" rather than a runtime
+SAF grant.
+
+The original Task 5/6 text below predates this amendment; the amendment governs.
+
+---
+
 ## Self-Review
 
 **Spec coverage (spec §A–§F + phasing):**

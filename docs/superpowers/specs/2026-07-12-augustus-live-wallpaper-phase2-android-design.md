@@ -110,15 +110,13 @@ code) when later builds are green.
   the `android.service.wallpaper.WallpaperService` intent-filter,
   `@xml/livewallpaper` meta-data, and
   `<uses-feature android:name="android.software.live_wallpaper" android:required="true"/>`.
-- **Keep a minimal `DirectorySelectionActivity`** (exported, non-game) for the
-  Storage Access Framework (SAF) folder grant — the wallpaper cannot render
-  without the C3 data folder, and a service cannot launch the SAF picker
-  itself. With no launcher icon, this activity is reached via the
-  live-wallpaper **settings hook**: `@xml/livewallpaper` declares
-  `android:settingsActivity` pointing at `DirectorySelectionActivity`, so the
-  wallpaper picker's "Settings" button opens the SAF grant. The wallpaper
-  itself is selected from Android's system wallpaper picker. (A dedicated
-  in-app "set wallpaper" button and a full settings UI are Phase 3.)
+- **`AssetSelectionActivity`** (exported; launchable AND the wallpaper's
+  `settingsActivity`) does a one-time SAF folder pick and copies the C3 data
+  into internal storage (see §E). `@xml/livewallpaper` declares
+  `android:settingsActivity` pointing at it, so the wallpaper picker's
+  "Settings" button opens the setup; it is also launchable so assets can be
+  granted before the wallpaper is set. The wallpaper itself is selected from
+  Android's system wallpaper picker. (A richer settings UI is Phase 3.)
 
 ### §D — Native ↔ Java bridge
 
@@ -132,17 +130,30 @@ code) when later builds are green.
 - The "became hidden" behavior is the same native code path Phase 1 exercises
   on desktop `FOCUS_LOST`/`HIDDEN`; only the trigger source differs.
 
-### §E — Bundled save + C3 data
+### §E — Data model: copy assets to internal storage (decided 2026-07-12)
 
-- Ship `wallpaper.svx` (an Augustus-format save) as an **APK asset**. On service
-  start, if it is absent from the savegame location, copy it there, then load
-  via the Phase-1 path (`dir_get_file_at_location("wallpaper.svx",
-  PATH_LOCATION_SAVEGAME)` → `game_file_load_saved_game`).
-- C3 graphics/data continue to load through Augustus's existing SAF pipeline
-  (`FileManager.java` + `src/platform/android/*`). The only adaptation is using
-  the **application/service context** where the current code assumes an activity
-  context; SAF persisted-URI grants are app-wide, so the existing
-  `ContentResolver` access is reusable from the service.
+**Decision (amends the earlier SAF-from-service approach):** the wallpaper does
+**not** read C3 data over SAF at runtime. A simple setup **activity** picks the
+source folder once and **copies the C3 data into the app's internal storage**;
+the wallpaper service then reads plain files from there with normal file I/O.
+This eliminates the SAF-from-service risk (the copy runs in an activity context)
+and matches h2lwp's own asset-extraction model.
+
+- **`AssetSelectionActivity`** (simple; launchable AND the wallpaper's
+  `settingsActivity`): a "Select Caesar III folder" button →
+  `ACTION_OPEN_DOCUMENT_TREE` → copy the tree's files into internal app storage
+  (`getFilesDir()/c3/`) via `ContentResolver` in the activity, with a
+  progress/done indication, then persist a "ready" flag. Replaces the
+  runtime-SAF `DirectorySelectionActivity`.
+- **Native data path:** on Android, Augustus's data directory resolves to the
+  internal `getFilesDir()/c3/` path, so the engine opens C3 graphics/data with
+  standard file I/O. The runtime SAF read path (`FileManager` from the service)
+  is therefore **not exercised** in wallpaper mode; its JNI contract is only
+  reconciled enough to compile/link (Task 5), not used at runtime.
+- **Bundled save:** ship `wallpaper.svx` (Augustus-format) as an **APK asset**;
+  the setup activity (or first service start) places it into the internal
+  savegame location, then Phase-1's `game_init_wallpaper()` loads it via
+  `dir_get_file_at_location("wallpaper.svx", PATH_LOCATION_SAVEGAME)`.
 
 ### §F — SDL in-process re-init guard
 
@@ -176,18 +187,20 @@ Adopt h2lwp's guard: on wallpaper re-selection while an SDL thread is live, call
 | WallpaperService host | rewritten `SDLActivity` (`extends WallpaperService`) + wallpaper `Engine` |
 | Manifest | `android/augustus/src/main/AndroidManifest.xml` |
 | Live-wallpaper meta | `res/android/xml/livewallpaper.xml` (new) |
-| SAF setup activity | `android/augustus/src/main/java/.../DirectorySelectionActivity.java` (kept) |
+| Asset-select activity | `android/augustus/src/main/java/.../AssetSelectionActivity.java` (SAF pick → copy to `getFilesDir()/c3/`) |
+| Native data path | Android data dir → internal `getFilesDir()/c3/` (plain file I/O) |
 | JNI event channel | `src/platform/android/*`, `pushWallpaperEvent`, `SDL_USEREVENT` handling in the native loop |
 | Reused native entry | `game_init_wallpaper()`, `city_view_go_to_random_tile()`, `--wallpaper` branch (Phase 1) |
-| Bundled save asset | APK `assets/` → copied to `PATH_LOCATION_SAVEGAME` on first start |
+| Bundled save asset | APK `assets/` → placed into internal savegame location |
 | Gradle | `android/augustus/build.gradle`, `android/SDL2/build.gradle`, `android/settings.gradle` |
 
 ## Risks
 
-- **SAF asset access from service context (primary Android-specific risk).**
-  Augustus does heavy runtime file I/O through Java `FileManager` using an
-  activity context; the service has none. Mitigation: use the application
-  context + app-wide persisted SAF grants; adapt context only, reuse code.
+- **~~SAF asset access from service context~~ — RESOLVED by the §E data model.**
+  The service no longer does SAF I/O: `AssetSelectionActivity` copies C3 data
+  into internal storage from an activity context, and the wallpaper reads plain
+  files. Residual risk is only the one-time copy (large data set; do it off the
+  UI thread with progress) — validated in device QA.
 - **SDL surface binding from a service.** SDL2's Android backend assumes a
   single `SDLActivity` singleton; the wallpaper `Engine` must satisfy the
   surface/context expectations. Mitigation: follow h2lwp's proven
