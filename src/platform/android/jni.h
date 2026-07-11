@@ -12,7 +12,10 @@ typedef struct {
     jmethodID method;
 } jni_function_handler;
 
-#define CLASS_AUGUSTUS_ACTIVITY "com/github/Keriew/augustus/AugustusMainActivity"
+// JNI type descriptor for the Context parameter FileManager's static methods take.
+// jni_get_activity() resolves to the WallpaperService instance, which is itself a Context.
+// (Previously a reference to the now-deleted AugustusMainActivity.)
+#define CLASS_CONTEXT "android/content/Context"
 #define CLASS_FILE_MANAGER "com/github/Keriew/augustus/FileManager"
 
 JNIEnv *jni_get_env(void);

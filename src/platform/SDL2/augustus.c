@@ -388,6 +388,17 @@ static void handle_event(SDL_Event *event)
                 platform_screen_set_windowed();
             } else if (event->user.code == USER_EVENT_CENTER_WINDOW) {
                 platform_screen_center_window();
+            } else if (event->user.code == WALLPAPER_EVENT_HIDE) {
+                if (game_wallpaper_mode()) {
+                    city_view_go_to_random_tile();
+#ifdef __ANDROID__
+                    SDL_AndroidSendMessage(0x8000 + 1 /* COMMAND_PAUSE_NOW */, 0);
+#endif
+                }
+            } else if (event->user.code == WALLPAPER_EVENT_RESIZE_DISPLAY) {
+                // SDL's own resize path handles this; no-op here.
+            } else if (event->user.code == WALLPAPER_EVENT_UPDATE_CONFIGS) {
+                // Phase 3; no-op in Phase 2.
             }
             break;
 

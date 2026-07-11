@@ -6,7 +6,12 @@
 #include "platform/android/jni.h"
 #include "platform/file_manager.h"
 
+#include "SDL.h"
+
 #include <string.h>
+
+#define ANDROID_BASELINE_DPI 160.0f
+#define DEFAULT_SCREEN_DENSITY 1.0f
 
 static int has_directory;
 static char path[FILE_NAME_MAX];
@@ -36,28 +41,21 @@ int android_has_c3_path(void)
 
 int android_show_c3_path_dialog(int again)
 {
+    (void) again;
+    // The SAF folder-grant dialog lived on the deleted AugustusMainActivity. Under the current
+    // data model the wallpaper reads C3 data copied to internal storage by AssetSelectionActivity
+    // (see Task 6); this legacy grant flow is retired, so this is a no-op stub.
     has_directory = 0;
-
-    jni_function_handler handler;
-    if (!jni_get_method_handler(CLASS_AUGUSTUS_ACTIVITY, "showDirectorySelection", "(Z)V", &handler)) {
-        return 0;
-    }
-    (*handler.env)->CallVoidMethod(handler.env, handler.activity, handler.method,
-        again ? JNI_TRUE : JNI_FALSE);
-    jni_destroy_function_handler(&handler);
-
-    return 1;
+    return 0;
 }
 
 float android_get_screen_density(void)
 {
-    jni_function_handler handler;
-    float result = 1.0f;
-    if (jni_get_method_handler(CLASS_AUGUSTUS_ACTIVITY, "getScreenDensity", "()F", &handler)) {
-        result = (float) (*handler.env)->CallFloatMethod(handler.env, handler.activity, handler.method);
+    float diagonal_dpi = 0.0f;
+    if (SDL_GetDisplayDPI(0, &diagonal_dpi, NULL, NULL) != 0 || diagonal_dpi <= 0.0f) {
+        return DEFAULT_SCREEN_DENSITY;
     }
-    jni_destroy_function_handler(&handler);
-    return result;
+    return diagonal_dpi / ANDROID_BASELINE_DPI;
 }
 
 int android_get_file_descriptor(const char *filename, const char *mode)
@@ -65,7 +63,7 @@ int android_get_file_descriptor(const char *filename, const char *mode)
     int result = 0;
     jni_function_handler handler;
     if (!jni_get_static_method_handler(CLASS_FILE_MANAGER, "openFileDescriptor",
-        "(L" CLASS_AUGUSTUS_ACTIVITY ";Ljava/lang/String;Ljava/lang/String;)I", &handler)) {
+        "(L" CLASS_CONTEXT ";Ljava/lang/String;Ljava/lang/String;)I", &handler)) {
         jni_destroy_function_handler(&handler);
         return 0;
     }
@@ -111,7 +109,7 @@ int android_get_directory_contents(const char *dir, int type, const char *extens
     jni_function_handler get_last_modified_time;
 
     if (!jni_get_static_method_handler(CLASS_FILE_MANAGER, "getDirectoryFileList",
-        "(L" CLASS_AUGUSTUS_ACTIVITY ";Ljava/lang/String;ILjava/lang/String;)[L" CLASS_FILE_MANAGER "$FileInfo;",
+        "(L" CLASS_CONTEXT ";Ljava/lang/String;ILjava/lang/String;)[L" CLASS_FILE_MANAGER "$FileInfo;",
         &handler)) {
         jni_destroy_function_handler(&handler);
         return LIST_ERROR;
@@ -162,7 +160,7 @@ int android_create_directory(const char *name)
     int result = 0;
     jni_function_handler handler;
     if (!jni_get_static_method_handler(CLASS_FILE_MANAGER, "createFolder",
-        "(L" CLASS_AUGUSTUS_ACTIVITY ";Ljava/lang/String;)I", &handler)) {
+        "(L" CLASS_CONTEXT ";Ljava/lang/String;)I", &handler)) {
         jni_destroy_function_handler(&handler);
         return 0;
     }
@@ -180,7 +178,7 @@ int android_remove_file(const char *filename)
     int result = 0;
     jni_function_handler handler;
     if (!jni_get_static_method_handler(CLASS_FILE_MANAGER, "deleteFile",
-        "(L" CLASS_AUGUSTUS_ACTIVITY ";Ljava/lang/String;)Z", &handler)) {
+        "(L" CLASS_CONTEXT ";Ljava/lang/String;)Z", &handler)) {
         jni_destroy_function_handler(&handler);
         return 0;
     }
@@ -196,4 +194,20 @@ int android_remove_file(const char *filename)
 JNIEXPORT void JNICALL Java_com_github_Keriew_augustus_DirectorySelectionActivity_gotDirectory(JNIEnv *env, jobject thiz)
 {
     has_directory = 1;
+}
+
+// Values MUST match WALLPAPER_EVENT_* in SDLActivity.java (0/1/2); translated to the
+// WALLPAPER_EVENT_HIDE/UPDATE_CONFIGS/RESIZE_DISPLAY codes (android.h) before being posted,
+// so they can't collide with the desktop USER_EVENT_* codes sharing the same SDL_USEREVENT type.
+JNIEXPORT void JNICALL Java_org_libsdl_app_SDLActivity_pushWallpaperEvent(JNIEnv *env, jclass cls, jint code)
+{
+    (void) env; (void) cls;
+    if (SDL_WasInit(SDL_INIT_EVENTS) == 0) {
+        return;
+    }
+    SDL_Event event;
+    SDL_zero(event);
+    event.type = SDL_USEREVENT;
+    event.user.code = WALLPAPER_EVENT_CODE_BASE + (int) code;
+    SDL_PushEvent(&event);
 }
