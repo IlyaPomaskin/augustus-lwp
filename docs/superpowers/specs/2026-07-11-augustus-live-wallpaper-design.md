@@ -1,7 +1,8 @@
 # Augustus Live Wallpaper — Design
 
 Date: 2026-07-11
-Status: Approved (design), pending implementation plan
+Status: Ready for implementation plan
+**Plan-confidence status:** Ready for implementation plan (iteration 2, confidence 92%)
 
 Convert Augustus (a Caesar III city-builder, C + SDL2) into an Android Live
 Wallpaper that autoloads a bundled city save, renders the city map full-screen
@@ -50,6 +51,20 @@ paths for Augustus.
   progress. Requires the wallpaper window to be treated as a city-type window
   (see below).
 - **Interaction:** none (non-interactive wallpaper; touches are ignored).
+- **Power posture:** the city simulation runs only while the wallpaper is
+  visible; native pauses both ticks and rendering when hidden (the
+  `HIDE` → `COMMAND_PAUSE_NOW` path). No extra fps cap beyond Augustus's existing
+  frame timing.
+
+## Packaging & mode selection
+
+- **Single APK** contains both the full game and the wallpaper service. There is
+  no separate wallpaper-only build variant or `applicationId`; the same
+  `libaugustus.so` and Java sources serve both.
+- **Mode is chosen at runtime:** the `WallpaperService`'s `SDLMain` passes a
+  `--wallpaper` argument via `getArguments()`, which `platform_parse_arguments`
+  parses into the `args` struct; the launcher `AugustusMainActivity` starts the
+  game normally (no flag). The startup branch at `augustus.c:686` reads this flag.
 
 ## Constraints
 
@@ -57,7 +72,12 @@ paths for Augustus.
   through a Storage Access Framework (SAF) folder URI the user selects, via
   `FileManager.java` + `src/platform/android/*`. The wallpaper reuses this
   existing asset/data pipeline — we do **not** build a parallel asset system.
-- Android build uses **SDL2** (the default). SDL3 is out of scope.
+- Android build uses **SDL2** (the default; the Gradle scripts auto-select SDL2
+  unless SDL3 AARs are present). SDL3 is out of scope.
+- **In-flight / upstream:** work targets local `master` (branch
+  `feature/live-wallpaper`). There is no wallpaper-related in-flight work; the
+  numerous `upstream/*` feature branches are out of scope and no rebase onto them
+  is planned for v1.
 - SDL's Android backend assumes a single `SDLActivity` singleton and a valid
   context via `SDL_AndroidGetActivity()`. The hosting approach must keep that
   satisfiable from a service.
@@ -68,8 +88,9 @@ Three layers, built and validated in phases.
 
 ### 1. Native wallpaper mode (desktop-testable)
 
-- **Entry branch.** Add a wallpaper mode flag consumed at the startup-decision
-  point `src/platform/SDL2/augustus.c:686`
+- **Entry branch.** Add an `args->wallpaper` flag (set by `--wallpaper`, parsed in
+  `platform_parse_arguments`) consumed at the startup-decision point
+  `src/platform/SDL2/augustus.c:686`
   (`args->launch_asset_previewer ? window_asset_previewer_show() : game_init()`).
   In wallpaper mode, run the asset-loading portion of `game_init()` (graphics,
   fonts, model, sound, `game_state_init()`), then load the bundled save and show
@@ -99,13 +120,21 @@ Three layers, built and validated in phases.
   Add `set_viewport_wallpaper()` (x=0, y=0, width=`screen_width`,
   height=`screen_height`) and select it from `city_view_set_viewport()` /
   `city_view_set_scale()` when wallpaper mode is active.
-- **Camera on hide.** While visible, do not move the camera. On the hide trigger
-  (Phase 1: a debug key/timer; Phase 2: the `HIDE` wallpaper event), re-center on
-  a new valid tile via `city_view_go_to_grid_offset()` or
-  `city_view_set_camera()`, clamped by the existing `check_camera_boundaries()`.
+- **Camera on hide.** While visible, do not move the camera. Re-centering is
+  driven by a single internal "became hidden" hook, mapped per platform: on
+  desktop to `SDL_WINDOWEVENT_HIDDEN` / `FOCUS_LOST`, on Android to the `HIDE`
+  wallpaper event — one code path for both. On that hook, re-center on a new valid
+  tile via `city_view_go_to_grid_offset()` or `city_view_set_camera()`, clamped by
+  the existing `check_camera_boundaries()`. This makes the behavior testable on
+  desktop in Phase 1 (minimize/refocus the window) without a debug-only trigger.
+- **Disable autosave.** In wallpaper mode, guard `setting_monthly_autosave()` and
+  the yearly autosave call (`src/game/tick.c:117`,
+  `game_file_make_yearly_autosave`) so the running "living city" never overwrites
+  the bundled save or writes to the user's save directory.
 - **Frame loop.** No new render loop needed. The existing
   `run_and_draw()`/`main_loop()` (`augustus.c:152,406`) already draws every frame
-  and ticks the sim per `game_run()`.
+  and ticks the sim per `game_run()`. When hidden, the native loop pauses ticks
+  and rendering (`HIDE` → `COMMAND_PAUSE_NOW`).
 
 ### 2. Android WallpaperService hosting (Approach 1)
 
@@ -136,18 +165,21 @@ Three layers, built and validated in phases.
 
 ### 3. Settings (start minimal, grow)
 
-- Reuse Augustus's existing config mechanism (`config_*` / settings file) for
-  wallpaper keys; the settings UI edits it; native re-reads on `UPDATE_CONFIGS`.
-  No JNI argument plumbing for config (file-based channel, like h2lwp).
+- Reuse Augustus's existing config system (`config_get`/`config_set`) with new
+  `CONFIG_*` keys (`src/core/config.h`) for wallpaper settings; the settings UI
+  edits them; native re-reads on `UPDATE_CONFIGS`. No JNI argument plumbing for
+  config (config-system channel, analogous to h2lwp's file-based channel).
 - A launcher entry offers "Set wallpaper" firing
   `WallpaperManager.ACTION_CHANGE_LIVE_WALLPAPER` for the service component.
 - Initial settings kept small (e.g. render scale; optionally brightness).
 
 ## Phasing
 
-1. **Phase 1 — Native mode.** `--wallpaper` flag, bundled-save autoload,
-   `WINDOW_CITY_WALLPAPER` map-only fullscreen window, living city, camera
-   re-center on a trigger (debug key/timer). Validated on **desktop**.
+1. **Phase 1 — Native mode.** `--wallpaper` flag, bundled-save autoload
+   (copy-to-savegame on first run), autosave disabled, `WINDOW_CITY_WALLPAPER`
+   map-only fullscreen window, living city, camera re-center on the "became
+   hidden" hook (desktop: `SDL_WINDOWEVENT_HIDDEN`/`FOCUS_LOST`). Validated on
+   **desktop**.
 2. **Phase 2 — Android hosting.** Vendor + rewrite SDL layer into a
    `WallpaperService`, surface binding, manifest, JNI event channel, bundled
    save + reuse of the existing SAF asset pipeline from the service context.
@@ -163,11 +195,14 @@ Each phase is independently testable and mergeable.
   does heavy runtime file I/O through Java `FileManager` using the activity
   context; the service has no activity. Mitigation: use the application context +
   app-wide persisted SAF grants; reuse existing code, adapt context only.
-- **SDL re-init in-process.** Mitigate with the `Process.killProcess()` guard on
-  re-selection (h2lwp precedent).
+- **SDL re-init in-process.** Decision: adopt h2lwp's guard — on wallpaper
+  re-selection with a live SDL thread, call `nativeQuit()` then
+  `Process.killProcess()` and let Android restart the service (SDL cannot cleanly
+  re-init in-process).
 - **Living city drift.** A running simulation mutates the loaded save state over
-  time; since we reload the bundled save on start this is acceptable, but confirm
-  no autosave writes back over the bundle.
+  time. Decision: the bundled save is reloaded on each start, and monthly/yearly
+  autosave is disabled in wallpaper mode (see "Disable autosave"), so the bundle
+  is never written back.
 - **Tick gating regressions.** Adding `WINDOW_CITY_WALLPAPER` to city predicates
   must not enable standard city input/menus for the wallpaper window.
 
@@ -194,3 +229,39 @@ Each phase is independently testable and mergeable.
 | SDL Java layer | vendored `org/libsdl/app/*` (from `android/SDL2/`) into the app module |
 | Manifest | `android/augustus/src/main/AndroidManifest.xml` |
 | Asset/SAF | `FileManager.java`, `src/platform/android/asset_handler.c` |
+| Config/settings | `src/core/config.h` (`config_get`/`config_set`, `CONFIG_*`) |
+| Autosave (drift) | `src/game/tick.c:117` (`setting_monthly_autosave` → `autosave.svx`), `game_file_make_yearly_autosave` |
+| Arg parsing | `platform_parse_arguments()`; `args->launch_asset_previewer` at `augustus.c:686` |
+| Android build target | `android/build.gradle` / `settings.gradle` auto-select SDL2 unless SDL3 AARs present; single `applicationId`, no product flavors |
+
+## Confidence Survey
+
+Edit checkboxes in-place to answer. Mark exactly one option per question with `[x]`. The option labeled *(Recommended)* is the skill's best guess given current plan + repo context — override freely.
+
+_No open questions — all iteration-1 questions were answered and folded into the plan body (see Reconciliation Log)._
+
+## Reconciliation Log
+
+Append-only. Newest entry at the bottom.
+
+### Iteration 1 — 2026-07-11
+- **Confidence:** 75% (cap from Readiness / open architectural tradeoffs; universal in-flight cap 85%)
+- **Resolved:** none (first pass)
+- **Still uncertain:** packaging & mode-selection (Dim 1), power posture of a continuously-ticking living city (Dim 2), several open architectural tradeoffs — save delivery, autosave, SAF service context, settings channel, re-init (Dim 3)
+- **New questions:** Q1.1 … Q1.10
+
+### Iteration 2 — 2026-07-11
+- **Confidence:** 92% (all iteration-1 caps lifted; no dimension below 90%)
+- **Resolved:**
+  - Q1.1 → single APK, runtime mode selection → new "Packaging & mode selection"
+  - Q1.2 → `--wallpaper` arg via `getArguments`/`platform_parse_arguments` → Packaging + Arch §1 Entry branch
+  - Q1.3 → bundle `.svx`, copy to savegame on first run, load normally → Arch §1 Autoload (confirmed)
+  - Q1.4 → disable monthly+yearly autosave in wallpaper mode → Arch §1 "Disable autosave" + Risks
+  - Q1.5 → single "became hidden" hook (desktop `WINDOW_HIDDEN`/`FOCUS_LOST`, Android `HIDE`) → Arch §1 Camera on hide + Phasing P1
+  - Q1.6 → reuse persisted SAF grant via application context → Arch §2 Assets + Risks (confirmed)
+  - Q1.7 → reuse `config_get`/`config_set` + new `CONFIG_*` keys → Arch §3 Settings
+  - Q1.8 → h2lwp `Process.killProcess()` re-init guard → Risks
+  - Q1.9 → SDL2 on local `master`, upstream out of scope → Constraints (in-flight note)
+  - Q1.10 → living city visible, native pauses ticks+render when hidden, no fps cap → Behavior "Power posture" + Arch §1 Frame loop
+- **Still uncertain:** none material at the tech-spec layer; remaining detail is implementation-plan granularity (task breakdown, test placement)
+- **New questions:** none
