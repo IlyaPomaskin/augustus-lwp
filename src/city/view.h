@@ -60,6 +60,8 @@ int city_view_tile_to_grid_offset(const view_tile *tile);
 
 void city_view_go_to_grid_offset(int grid_offset);
 
+void city_view_go_to_random_tile(void);
+
 void city_view_rotate_left(void);
 
 void city_view_rotate_right(void);

@@ -4,6 +4,8 @@
 #include "core/calc.h"
 #include "core/config.h"
 #include "core/direction.h"
+#include "core/log.h"
+#include "core/random.h"
 #include "editor/editor.h"
 #include "game/game.h"
 #include "graphics/menu.h"
@@ -536,6 +538,22 @@ void city_view_go_to_grid_offset(int grid_offset)
     data.camera.pixel.x = 0;
     data.camera.pixel.y = 0;
     check_camera_boundaries();
+}
+
+void city_view_go_to_random_tile(void)
+{
+    int width = map_grid_width();
+    int height = map_grid_height();
+    for (int attempt = 0; attempt < 100; attempt++) {
+        int x = random_between_from_stdlib(0, width - 1);
+        int y = random_between_from_stdlib(0, height - 1);
+        int grid_offset = map_grid_offset(x, y);
+        if (map_grid_is_valid_offset(grid_offset)) {
+            log_info("Wallpaper: recenter to grid offset", 0, grid_offset);
+            city_view_go_to_grid_offset(grid_offset);
+            return;
+        }
+    }
 }
 
 static int get_center_grid_offset(void)

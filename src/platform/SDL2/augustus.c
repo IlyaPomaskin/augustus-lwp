@@ -1,5 +1,6 @@
 #include "SDL.h"
 
+#include "city/view.h"
 #include "core/config.h"
 #include "core/encoding.h"
 #include "core/file.h"
@@ -209,6 +210,9 @@ static void handle_window_event(SDL_WindowEvent *event, int *window_active)
             break;
         case SDL_WINDOWEVENT_FOCUS_LOST:
             mouse_set_window_focus(0);
+            if (game_wallpaper_mode()) {
+                city_view_go_to_random_tile();
+            }
             break;
         case SDL_WINDOWEVENT_FOCUS_GAINED:
             mouse_set_window_focus(1);
@@ -235,6 +239,9 @@ static void handle_window_event(SDL_WindowEvent *event, int *window_active)
         case SDL_WINDOWEVENT_HIDDEN:
             SDL_Log("Window %u hidden", (unsigned int) event->windowID);
             *window_active = 0;
+            if (game_wallpaper_mode()) {
+                city_view_go_to_random_tile();
+            }
             break;
 
         case SDL_WINDOWEVENT_EXPOSED:
