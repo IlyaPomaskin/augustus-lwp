@@ -80,8 +80,9 @@ int window_city_is_window_cityview(void)
 {
     int is_regular_cityview = ((window_get_id() >= WINDOW_CITY && window_get_id() <= WINDOW_RACE_BET)
         && window_get_id() != WINDOW_TOP_MENU);
+    int is_wallpaper = window_get_id() == WINDOW_CITY_WALLPAPER;
     int is_cart_depo_window = 0; // placeholder
-    return is_regular_cityview || is_cart_depo_window;
+    return is_regular_cityview || is_wallpaper || is_cart_depo_window;
 }
 
 static void draw_background(void)
@@ -921,6 +922,28 @@ void window_city_draw_panels(void)
 void window_city_draw(void)
 {
     widget_city_draw();
+}
+
+static void draw_foreground_wallpaper(void)
+{
+    window_city_draw(); // == widget_city_draw(): the map only, no chrome
+}
+
+static void handle_input_wallpaper(const mouse *m, const hotkeys *h)
+{
+    // Non-interactive wallpaper: ignore all input.
+}
+
+void window_city_wallpaper_show(void)
+{
+    window_type window = {
+        WINDOW_CITY_WALLPAPER,
+        0, // no draw_background: draw_foreground repaints the full map each frame
+        draw_foreground_wallpaper,
+        handle_input_wallpaper,
+        0  // no tooltip
+    };
+    window_show(&window);
 }
 
 void window_city_show(void)

@@ -10,6 +10,7 @@ void window_city_draw_panels(void);
 void window_city_draw(void);
 
 void window_city_show(void);
+void window_city_wallpaper_show(void);
 
 void window_city_military_show(int legion_formation_id);
 int window_city_simulated_weather(weather_type weather);

@@ -212,7 +212,7 @@ int game_init_wallpaper(void)
         return 0;
     }
     formation_set_selected(0); // a loaded save may have a legion selected; keep the map view clean
-    window_city_show();
+    window_city_wallpaper_show();
     return 1;
 }
 

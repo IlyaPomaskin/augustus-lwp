@@ -58,6 +58,7 @@ int game_speed_get_elapsed_ticks(void)
             return 0;
         case WINDOW_CITY:
         case WINDOW_CITY_MILITARY:
+        case WINDOW_CITY_WALLPAPER:
         case WINDOW_SLIDING_SIDEBAR:
         case WINDOW_OVERLAY_MENU:
         case WINDOW_MILITARY_MENU:
