@@ -70,4 +70,11 @@ public class DirectorySelectionActivity extends AppCompatActivity {
             directorySelectionLauncher.launch(Uri.EMPTY);
         }
     }
+
+    // Native methods moved here from the deleted AugustusMainActivity. Their JNI exports are
+    // Java_com_github_Keriew_augustus_DirectorySelectionActivity_{gotDirectory,releaseAssetManager}.
+    // The SAF flow that invokes them is wired up in Task 5.
+    public native void gotDirectory();
+
+    public native void releaseAssetManager();
 }

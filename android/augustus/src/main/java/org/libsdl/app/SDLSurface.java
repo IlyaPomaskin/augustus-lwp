@@ -137,8 +137,10 @@ public class SDLSurface extends SurfaceView implements SurfaceHolder.Callback,
 
         // Prevent a screen distortion glitch,
         // for instance when the device is in Landscape and a Portrait App is resumed.
+        // NOTE: SDLActivity is a WallpaperService and cannot request/report an orientation, so this
+        // detached SDLSurface never drives orientation skipping (its callbacks do not fire anyway).
         boolean skip = false;
-        int requestedOrientation = SDLActivity.mSingleton.getRequestedOrientation();
+        int requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED;
 
         if (requestedOrientation == ActivityInfo.SCREEN_ORIENTATION_PORTRAIT || requestedOrientation == ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT) {
             if (mWidth > mHeight) {
@@ -161,15 +163,7 @@ public class SDLSurface extends SurfaceView implements SurfaceHolder.Callback,
            }
         }
 
-        // Don't skip in MultiWindow.
-        if (skip) {
-            if (Build.VERSION.SDK_INT >= 24 /* Android 7.0 (N) */) {
-                if (SDLActivity.mSingleton.isInMultiWindowMode()) {
-                    Log.v("SDL", "Don't skip in Multi-Window");
-                    skip = false;
-                }
-            }
-        }
+        // Multi-window does not apply to a WallpaperService.
 
         if (skip) {
            Log.v("SDL", "Skip .. Surface is not ready.");

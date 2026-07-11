@@ -1,6 +1,6 @@
 package com.github.Keriew.augustus;
 
-import android.app.Activity;
+import android.content.Context;
 import android.database.Cursor;
 import android.net.Uri;
 import android.os.ParcelFileDescriptor;
@@ -45,14 +45,14 @@ public class FileManager {
         }
     }
 
-    private static HashMap<String, FileInfo> getDirectoryContents(Activity activity, FileInfo dir) {
+    private static HashMap<String, FileInfo> getDirectoryContents(Context activity, FileInfo dir) {
         if (!dir.isDirectory()) {
             return new HashMap<>();
         }
         return getDirectoryContents(activity, dir.getUri());
     }
 
-    private static HashMap<String, FileInfo> getDirectoryContents(Activity activity, Uri dir) {
+    private static HashMap<String, FileInfo> getDirectoryContents(Context activity, Uri dir) {
         HashMap<String, FileInfo> result = directoryStructureCache.get(dir);
         if (result != null) {
             return result;
@@ -78,11 +78,11 @@ public class FileManager {
         return result;
     }
 
-    private static FileInfo findFile(Activity activity, FileInfo folder, String fileName) {
+    private static FileInfo findFile(Context activity, FileInfo folder, String fileName) {
         return getDirectoryContents(activity, folder).get(fileName.toLowerCase());
     }
 
-    private static FileInfo getDirectoryFromPath(Activity activity, String[] path) {
+    private static FileInfo getDirectoryFromPath(Context activity, String[] path) {
         ArrayList<FileInfo> dirList = new ArrayList<>();
         dirList.add(FileInfo.base);
 
@@ -103,7 +103,7 @@ public class FileManager {
         return dirList.get(dirList.size() - 1);
     }
 
-    private static FileInfo getFileFromPath(AugustusMainActivity activity, String filePath) {
+    private static FileInfo getFileFromPath(Context activity, String filePath) {
         try {
             if (baseUri == Uri.EMPTY) {
                 return null;
@@ -121,7 +121,7 @@ public class FileManager {
     }
 
     @SuppressWarnings("unused")
-    public static FileInfo[] getDirectoryFileList(AugustusMainActivity activity, String dir, int type, String ext) {
+    public static FileInfo[] getDirectoryFileList(Context activity, String dir, int type, String ext) {
         ArrayList<FileInfo> fileList = new ArrayList<>();
 
         if (baseUri == Uri.EMPTY) {
@@ -156,7 +156,7 @@ public class FileManager {
     }
 
     @SuppressWarnings("unused")
-    public static boolean deleteFile(AugustusMainActivity activity, String filePath) {
+    public static boolean deleteFile(Context activity, String filePath) {
         try {
             FileInfo fileInfo = getFileFromPath(activity, filePath);
             if (fileInfo == null) {
@@ -174,7 +174,7 @@ public class FileManager {
     }
 
     @SuppressWarnings("unused")
-    public static int openFileDescriptor(AugustusMainActivity activity, String filePath, String mode) {
+    public static int openFileDescriptor(Context activity, String filePath, String mode) {
         try {
             if (baseUri == Uri.EMPTY) {
                 return 0;
@@ -232,7 +232,7 @@ public class FileManager {
     }
     
     @SuppressWarnings("unused")
-    public static int createFolder(AugustusMainActivity activity, String folderPath) {
+    public static int createFolder(Context activity, String folderPath) {
         try {
             if (baseUri == Uri.EMPTY) {
                 return 0;

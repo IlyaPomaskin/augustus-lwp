@@ -23,6 +23,8 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Message;
+import android.os.Process;
+import android.service.wallpaper.WallpaperService;
 import android.text.Editable;
 import android.text.InputType;
 import android.text.Selection;
@@ -35,6 +37,7 @@ import android.view.InputDevice;
 import android.view.KeyEvent;
 import android.view.PointerIcon;
 import android.view.Surface;
+import android.view.SurfaceHolder;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.Window;
@@ -57,7 +60,7 @@ import java.util.Locale;
 /**
     SDL Activity
 */
-public class SDLActivity extends Activity implements View.OnSystemUiVisibilityChangeListener {
+public class SDLActivity extends WallpaperService implements View.OnSystemUiVisibilityChangeListener {
     private static final String TAG = "SDL";
     private static final int SDL_MAJOR_VERSION = 2;
     private static final int SDL_MINOR_VERSION = 32;
@@ -207,6 +210,12 @@ public class SDLActivity extends Activity implements View.OnSystemUiVisibilityCh
     /** If shared libraries (e.g. SDL or the native application) could not be loaded. */
     public static boolean mBrokenLibraries = true;
 
+    // Wallpaper event codes. Pushed to the native side via pushWallpaperEvent(). Must stay in
+    // sync with the native wallpaper event handler.
+    public static final int WALLPAPER_EVENT_HIDE = 0;
+    public static final int WALLPAPER_EVENT_UPDATE_CONFIGS = 1;
+    public static final int WALLPAPER_EVENT_RESIZE_DISPLAY = 2;
+
     // Main components
     protected static SDLActivity mSingleton;
     protected static SDLSurface mSurface;
@@ -270,11 +279,8 @@ public class SDLActivity extends Activity implements View.OnSystemUiVisibilityCh
     protected String[] getLibraries() {
         return new String[] {
             "SDL2",
-            // "SDL2_image",
-            // "SDL2_mixer",
-            // "SDL2_net",
-            // "SDL2_ttf",
-            "main"
+            "SDL2_mixer",
+            "augustus"
         };
     }
 
@@ -292,7 +298,7 @@ public class SDLActivity extends Activity implements View.OnSystemUiVisibilityCh
      * @return arguments for the native application.
      */
     protected String[] getArguments() {
-        return new String[0];
+        return new String[]{ "--wallpaper" };
     }
 
     public static void initialize() {
@@ -318,11 +324,11 @@ public class SDLActivity extends Activity implements View.OnSystemUiVisibilityCh
 
     // Setup
     @Override
-    protected void onCreate(Bundle savedInstanceState) {
+    public void onCreate() {
         Log.v(TAG, "Device: " + Build.DEVICE);
         Log.v(TAG, "Model: " + Build.MODEL);
         Log.v(TAG, "onCreate()");
-        super.onCreate(savedInstanceState);
+        super.onCreate();
 
         try {
             Thread.currentThread().setName("SDLActivity");
@@ -357,25 +363,10 @@ public class SDLActivity extends Activity implements View.OnSystemUiVisibilityCh
         }
 
         if (mBrokenLibraries) {
+            // A WallpaperService has no window to show an AlertDialog in; just log and bail.
             mSingleton = this;
-            AlertDialog.Builder dlgAlert  = new AlertDialog.Builder(this);
-            dlgAlert.setMessage("An error occurred while trying to start the application. Please try again and/or reinstall."
-                  + System.getProperty("line.separator")
-                  + System.getProperty("line.separator")
-                  + "Error: " + errorMsgBrokenLib);
-            dlgAlert.setTitle("SDL Error");
-            dlgAlert.setPositiveButton("Exit",
-                new DialogInterface.OnClickListener() {
-                    @Override
-                    public void onClick(DialogInterface dialog,int id) {
-                        // if this button is clicked, close current activity
-                        SDLActivity.mSingleton.finish();
-                    }
-                });
-           dlgAlert.setCancelable(false);
-           dlgAlert.create().show();
-
-           return;
+            Log.e(TAG, "An error occurred while trying to start the application. Error: " + errorMsgBrokenLib);
+            return;
         }
 
         // Set up JNI
@@ -392,11 +383,9 @@ public class SDLActivity extends Activity implements View.OnSystemUiVisibilityCh
 
         mHIDDeviceManager = HIDDeviceManager.acquire(this);
 
-        // Set up the surface
-        mSurface = createSDLSurface(this);
-
-        mLayout = new RelativeLayout(this);
-        mLayout.addView(mSurface);
+        // Create the SDL surface. It is NOT attached to a window: the WallpaperService Engine
+        // owns the real render surface, which is exposed to native SDL via getNativeSurface().
+        mSurface = createSDLSurface(getApplication());
 
         // Get our current screen orientation and pass it down.
         mCurrentOrientation = SDLActivity.getCurrentOrientation();
@@ -412,21 +401,7 @@ public class SDLActivity extends Activity implements View.OnSystemUiVisibilityCh
         } catch(Exception ignored) {
         }
 
-        setContentView(mLayout);
-
         setWindowStyle(false);
-
-        getWindow().getDecorView().setOnSystemUiVisibilityChangeListener(this);
-
-        // Get filename from "Open with" of another application
-        Intent intent = getIntent();
-        if (intent != null && intent.getData() != null) {
-            String filename = intent.getData().getPath();
-            if (filename != null) {
-                Log.v(TAG, "Got filename: " + filename);
-                SDLActivity.onNativeDropFile(filename);
-            }
-        }
     }
 
     protected void pauseNativeThread() {
@@ -451,59 +426,19 @@ public class SDLActivity extends Activity implements View.OnSystemUiVisibilityCh
         SDLActivity.handleNativeState();
     }
 
-    // Events
-    @Override
-    protected void onPause() {
-        Log.v(TAG, "onPause()");
-        super.onPause();
-
-        if (mHIDDeviceManager != null) {
-            mHIDDeviceManager.setFrozen(true);
-        }
-        if (!mHasMultiWindow) {
-            pauseNativeThread();
-        }
-    }
-
-    @Override
-    protected void onResume() {
-        Log.v(TAG, "onResume()");
-        super.onResume();
-
-        if (mHIDDeviceManager != null) {
-            mHIDDeviceManager.setFrozen(false);
-        }
-        if (!mHasMultiWindow) {
-            resumeNativeThread();
-        }
-    }
-
-    @Override
-    protected void onStop() {
-        Log.v(TAG, "onStop()");
-        super.onStop();
-        if (mHasMultiWindow) {
-            pauseNativeThread();
-        }
-    }
-
-    @Override
-    protected void onStart() {
-        Log.v(TAG, "onStart()");
-        super.onStart();
-        if (mHasMultiWindow) {
-            resumeNativeThread();
-        }
-    }
+    // Note: Activity lifecycle callbacks (onPause/onResume/onStart/onStop/onWindowFocusChanged)
+    // are intentionally absent. A WallpaperService has no such lifecycle; the SDLEngine drives
+    // native pause/resume through the surface lifecycle (onSurfaceChanged/onSurfaceDestroyed).
 
     public static int getCurrentOrientation() {
         int result = SDL_ORIENTATION_UNKNOWN;
 
-        Activity activity = (Activity)getContext();
-        if (activity == null) {
+        Context context = getContext();
+        if (context == null) {
             return result;
         }
-        Display display = activity.getWindowManager().getDefaultDisplay();
+        WindowManager windowManager = (WindowManager) context.getSystemService(Context.WINDOW_SERVICE);
+        Display display = windowManager.getDefaultDisplay();
 
         switch (display.getRotation()) {
             case Surface.ROTATION_0:
@@ -524,32 +459,6 @@ public class SDLActivity extends Activity implements View.OnSystemUiVisibilityCh
         }
 
         return result;
-    }
-
-    @Override
-    public void onWindowFocusChanged(boolean hasFocus) {
-        super.onWindowFocusChanged(hasFocus);
-        Log.v(TAG, "onWindowFocusChanged(): " + hasFocus);
-
-        if (SDLActivity.mBrokenLibraries) {
-           return;
-        }
-
-        mHasFocus = hasFocus;
-        if (hasFocus) {
-           mNextNativeState = NativeState.RESUMED;
-           SDLActivity.getMotionListener().reclaimRelativeMouseModeIfNeeded();
-
-           SDLActivity.handleNativeState();
-           nativeFocusChanged(true);
-
-        } else {
-           nativeFocusChanged(false);
-           if (!mHasMultiWindow) {
-               mNextNativeState = NativeState.PAUSED;
-               SDLActivity.handleNativeState();
-           }
-        }
     }
 
     @Override
@@ -580,7 +489,7 @@ public class SDLActivity extends Activity implements View.OnSystemUiVisibilityCh
     }
 
     @Override
-    protected void onDestroy() {
+    public void onDestroy() {
         Log.v(TAG, "onDestroy()");
 
         if (mHIDDeviceManager != null) {
@@ -613,48 +522,20 @@ public class SDLActivity extends Activity implements View.OnSystemUiVisibilityCh
         super.onDestroy();
     }
 
-    @Override
     public void onBackPressed() {
-        // Check if we want to block the back button in case of mouse right click.
-        //
-        // If we do, the normal hardware back button will no longer work and people have to use home,
-        // but the mouse right click will work.
-        //
-        boolean trapBack = SDLActivity.nativeGetHintBoolean("SDL_ANDROID_TRAP_BACK_BUTTON", false);
-        if (trapBack) {
-            // Exit and let the mouse handler handle this button (if appropriate)
-            return;
-        }
-
-        // Default system back button behavior.
-        if (!isFinishing()) {
-            super.onBackPressed();
-        }
+        // No-op: a WallpaperService has no back-button handling.
+        Log.v(TAG, "onBackPressed()");
     }
 
     // Called by JNI from SDL.
     public static void manualBackButton() {
-        mSingleton.pressBackButton();
-    }
-
-    // Used to get us onto the activity's main thread
-    public void pressBackButton() {
-        runOnUiThread(new Runnable() {
-            @Override
-            public void run() {
-                if (!SDLActivity.this.isFinishing()) {
-                    SDLActivity.this.superOnBackPressed();
-                }
-            }
-        });
     }
 
     // Used to access the system back behavior.
     public void superOnBackPressed() {
-        super.onBackPressed();
+        onBackPressed();
     }
 
-    @Override
     public boolean dispatchKeyEvent(KeyEvent event) {
 
         if (SDLActivity.mBrokenLibraries) {
@@ -671,7 +552,7 @@ public class SDLActivity extends Activity implements View.OnSystemUiVisibilityCh
             ) {
             return false;
         }
-        return super.dispatchKeyEvent(event);
+        return false;
     }
 
     /* Transition to next state */
@@ -722,6 +603,96 @@ public class SDLActivity extends Activity implements View.OnSystemUiVisibilityCh
                 mCurrentNativeState = mNextNativeState;
             }
         }
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // Live-wallpaper engine.
+    //
+    // SDL renders into this engine's SurfaceHolder surface, which getNativeSurface() returns to the
+    // native side. The SDL thread is started from onSurfaceChanged (the moment the wallpaper surface
+    // exists), mirroring how the stock SDLSurface.surfaceChanged() starts it in the Activity build.
+    // ---------------------------------------------------------------------------------------------
+    private static SDLEngine mEngine;
+
+    class SDLEngine extends Engine {
+        protected Thread mSDLThread;
+        private SurfaceHolder mHolder;
+        protected Display mDisplay;
+
+        SDLEngine() {
+            mDisplay = ((WindowManager) getSystemService(Context.WINDOW_SERVICE)).getDefaultDisplay();
+            setTouchEventsEnabled(true);
+        }
+
+        @Override
+        public void onVisibilityChanged(boolean isVisible) {
+            Log.v(TAG, "Engine onVisibilityChanged " + isVisible);
+            if (SDLActivity.mBrokenLibraries) {
+                return;
+            }
+            if (isVisible) {
+                pushWallpaperEvent(WALLPAPER_EVENT_UPDATE_CONFIGS);
+            } else {
+                pushWallpaperEvent(WALLPAPER_EVENT_HIDE);
+            }
+        }
+
+        @Override
+        public void onSurfaceCreated(SurfaceHolder holder) {
+            super.onSurfaceCreated(holder);
+            Log.v(TAG, "Engine onSurfaceCreated");
+            if (mHolder == null) {
+                mHolder = holder;
+            }
+            SDLActivity.onNativeSurfaceCreated();
+        }
+
+        @Override
+        public void onSurfaceChanged(SurfaceHolder holder, int format, int width, int height) {
+            Log.v(TAG, String.format("Engine onSurfaceChanged format %d, width %d, height %d", format, width, height));
+            if (mHolder != holder) {
+                return;
+            }
+            super.onSurfaceChanged(holder, format, width, height);
+
+            SDLActivity.nativeSetScreenResolution(width, height, width, height, mDisplay.getRefreshRate());
+            SDLActivity.onNativeResize();
+            SDLActivity.onNativeSurfaceChanged();
+
+            pushWallpaperEvent(WALLPAPER_EVENT_RESIZE_DISPLAY);
+
+            if (mSDLThread == null) {
+                // Entry point to the C app: start the SDL thread once the wallpaper surface exists.
+                Log.v(TAG, "Starting SDLThread");
+                mSDLThread = new Thread(new SDLMain(), "SDLThread");
+                mSDLThread.start();
+            } else {
+                // Surface was recreated (e.g. the wallpaper became visible again).
+                SDLActivity.nativeResume();
+            }
+        }
+
+        @Override
+        public void onSurfaceDestroyed(SurfaceHolder holder) {
+            Log.v(TAG, "Engine onSurfaceDestroyed");
+            if (holder == mHolder) {
+                SDLActivity.nativePause();
+            }
+            super.onSurfaceDestroyed(holder);
+        }
+    }
+
+    @Override
+    public Engine onCreateEngine() {
+        Log.v(TAG, "onCreateEngine");
+        // SDL cannot cleanly re-initialize within the same process. If an engine with a running SDL
+        // thread already exists, quit and kill the process so Android restarts us fresh (h2lwp).
+        if (mEngine != null && mEngine.mSDLThread != null) {
+            SDLActivity.nativeQuit();
+            Process.killProcess(Process.myPid());
+        }
+        mEngine = new SDLEngine();
+        return mEngine;
     }
 
     // Messages from the SDLMain thread
@@ -903,6 +874,7 @@ public class SDLActivity extends Activity implements View.OnSystemUiVisibilityCh
 
     // C functions we call
     public static native String nativeGetVersion();
+    public static native void pushWallpaperEvent(int code);
     public static native int nativeSetupJNI();
     public static native int nativeRunMain(String library, String function, Object arguments);
     public static native void nativeLowMemory();
@@ -1026,7 +998,7 @@ public class SDLActivity extends Activity implements View.OnSystemUiVisibilityCh
         }
 
         Log.v(TAG, "setOrientation() requestedOrientation=" + req + " width=" + w +" height="+ h +" resizable=" + resizable + " hint=" + hint);
-        mSingleton.setRequestedOrientation(req);
+        // No-op: a WallpaperService cannot set a requested orientation.
     }
 
     /**
@@ -1154,11 +1126,11 @@ public class SDLActivity extends Activity implements View.OnSystemUiVisibilityCh
     public static double getDiagonal()
     {
         DisplayMetrics metrics = new DisplayMetrics();
-        Activity activity = (Activity)getContext();
-        if (activity == null) {
+        Context context = getContext();
+        if (context == null) {
             return 0.0;
         }
-        activity.getWindowManager().getDefaultDisplay().getMetrics(metrics);
+        ((WindowManager) context.getSystemService(Context.WINDOW_SERVICE)).getDefaultDisplay().getMetrics(metrics);
 
         double dWidthInches = metrics.widthPixels / (double)metrics.xdpi;
         double dHeightInches = metrics.heightPixels / (double)metrics.ydpi;
@@ -1384,10 +1356,11 @@ public class SDLActivity extends Activity implements View.OnSystemUiVisibilityCh
      * This method is called by SDL using JNI.
      */
     public static Surface getNativeSurface() {
-        if (SDLActivity.mSurface == null) {
+        // The render surface is owned by the live-wallpaper engine, not by an attached SDLSurface.
+        if (mEngine == null || mEngine.mHolder == null) {
             return null;
         }
-        return SDLActivity.mSurface.getNativeSurface();
+        return mEngine.mHolder.getSurface();
     }
 
     // Input
@@ -1442,49 +1415,9 @@ public class SDLActivity extends Activity implements View.OnSystemUiVisibilityCh
             final int[] buttonIds,
             final String[] buttonTexts,
             final int[] colors) {
-
-        messageboxSelection[0] = -1;
-
-        // sanity checks
-
-        if ((buttonFlags.length != buttonIds.length) && (buttonIds.length != buttonTexts.length)) {
-            return -1; // implementation broken
-        }
-
-        // collect arguments for Dialog
-
-        final Bundle args = new Bundle();
-        args.putInt("flags", flags);
-        args.putString("title", title);
-        args.putString("message", message);
-        args.putIntArray("buttonFlags", buttonFlags);
-        args.putIntArray("buttonIds", buttonIds);
-        args.putStringArray("buttonTexts", buttonTexts);
-        args.putIntArray("colors", colors);
-
-        // trigger Dialog creation on UI thread
-
-        runOnUiThread(new Runnable() {
-            @Override
-            public void run() {
-                messageboxCreateAndShow(args);
-            }
-        });
-
-        // block the calling thread
-
-        synchronized (messageboxSelection) {
-            try {
-                messageboxSelection.wait();
-            } catch (InterruptedException ex) {
-                ex.printStackTrace();
-                return -1;
-            }
-        }
-
-        // return selected value
-
-        return messageboxSelection[0];
+        // Message boxes need an Activity window, which a WallpaperService does not have.
+        Log.v(TAG, "messageboxShowMessageBox (no-op in WallpaperService): " + title);
+        return -1;
     }
 
     protected void messageboxCreateAndShow(Bundle args) {
@@ -1620,32 +1553,8 @@ public class SDLActivity extends Activity implements View.OnSystemUiVisibilityCh
         dialog.show();
     }
 
-    private final Runnable rehideSystemUi = new Runnable() {
-        @Override
-        public void run() {
-            if (Build.VERSION.SDK_INT >= 19 /* Android 4.4 (KITKAT) */) {
-                int flags = View.SYSTEM_UI_FLAG_FULLSCREEN |
-                        View.SYSTEM_UI_FLAG_HIDE_NAVIGATION |
-                        View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY |
-                        View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN |
-                        View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION |
-                        View.SYSTEM_UI_FLAG_LAYOUT_STABLE | View.INVISIBLE;
-
-                SDLActivity.this.getWindow().getDecorView().setSystemUiVisibility(flags);
-            }
-        }
-    };
-
     public void onSystemUiVisibilityChange(int visibility) {
-        if (SDLActivity.mFullscreenModeActive && ((visibility & View.SYSTEM_UI_FLAG_FULLSCREEN) == 0 || (visibility & View.SYSTEM_UI_FLAG_HIDE_NAVIGATION) == 0)) {
-
-            Handler handler = getWindow().getDecorView().getHandler();
-            if (handler != null) {
-                handler.removeCallbacks(rehideSystemUi); // Prevent a hide loop.
-                handler.postDelayed(rehideSystemUi, 2000);
-            }
-
-        }
+        // No-op: a WallpaperService has no decor view / system UI to manage.
     }
 
     /**
@@ -1775,12 +1684,13 @@ public class SDLActivity extends Activity implements View.OnSystemUiVisibilityCh
      * This method is called by SDL using JNI.
      */
     public static void requestPermission(String permission, int requestCode) {
-        if (Build.VERSION.SDK_INT < 23 /* Android 6.0 (M) */) {
+        Context context = getContext();
+        if (Build.VERSION.SDK_INT < 23 /* Android 6.0 (M) */ || !(context instanceof Activity)) {
             nativePermissionResult(requestCode, true);
             return;
         }
 
-        Activity activity = (Activity)getContext();
+        Activity activity = (Activity)context;
         if (activity.checkSelfPermission(permission) != PackageManager.PERMISSION_GRANTED) {
             activity.requestPermissions(new String[]{permission}, requestCode);
         } else {
@@ -1788,7 +1698,6 @@ public class SDLActivity extends Activity implements View.OnSystemUiVisibilityCh
         }
     }
 
-    @Override
     public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
         boolean result = (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED);
         nativePermissionResult(requestCode, result);
@@ -1826,41 +1735,8 @@ public class SDLActivity extends Activity implements View.OnSystemUiVisibilityCh
         if(null == mSingleton) {
             return - 1;
         }
-
-        try
-        {
-            class OneShotTask implements Runnable {
-                String mMessage;
-                int mDuration;
-                int mGravity;
-                int mXOffset;
-                int mYOffset;
-
-                OneShotTask(String message, int duration, int gravity, int xOffset, int yOffset) {
-                    mMessage  = message;
-                    mDuration = duration;
-                    mGravity  = gravity;
-                    mXOffset  = xOffset;
-                    mYOffset  = yOffset;
-                }
-
-                public void run() {
-                    try
-                    {
-                        Toast toast = Toast.makeText(mSingleton, mMessage, mDuration);
-                        if (mGravity >= 0) {
-                            toast.setGravity(mGravity, mXOffset, mYOffset);
-                        }
-                        toast.show();
-                    } catch(Exception ex) {
-                        Log.e(TAG, ex.getMessage());
-                    }
-                }
-            }
-            mSingleton.runOnUiThread(new OneShotTask(message, duration, gravity, xOffset, yOffset));
-        } catch(Exception ex) {
-            return -1;
-        }
+        // Toasts need an Activity UI thread; not shown from a WallpaperService.
+        Log.v(TAG, "showToast (no-op in WallpaperService): " + message);
         return 0;
     }
 }
@@ -1887,13 +1763,6 @@ class SDLMain implements Runnable {
         SDLActivity.nativeRunMain(library, function, arguments);
 
         Log.v("SDL", "Finished main function");
-
-        if (SDLActivity.mSingleton != null && !SDLActivity.mSingleton.isFinishing()) {
-            // Let's finish the Activity
-            SDLActivity.mSDLThread = null;
-            SDLActivity.mSingleton.finish();
-        }  // else: Activity is already being destroyed
-
     }
 }
 
