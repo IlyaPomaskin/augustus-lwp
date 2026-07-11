@@ -74,6 +74,7 @@ int platform_parse_arguments(int argc, char **argv, augustus_args *output_args)
     output_args->use_software_cursor = 0;
     output_args->force_fullscreen = 0;
     output_args->display_id = 0;
+    output_args->wallpaper = 0;
 
     for (int i = 1; i < argc; i++) {
         // we ignore "-psn" arguments, this is needed to launch the app
@@ -122,6 +123,8 @@ int platform_parse_arguments(int argc, char **argv, augustus_args *output_args)
             output_args->force_windowed = 1;
         } else if (strcmp(argv[i], "--asset-previewer") == 0) {
             output_args->launch_asset_previewer = 1;
+        } else if (strcmp(argv[i], "--wallpaper") == 0) {
+            output_args->wallpaper = 1;
         } else if (strcmp(argv[i], "--enable-joysticks") == 0) {
             output_args->enable_joysticks = 1;
         } else if (strcmp(argv[i], "--software-cursor") == 0) {
