@@ -545,8 +545,8 @@ void city_view_go_to_random_tile(void)
     int width = map_grid_width();
     int height = map_grid_height();
     for (int attempt = 0; attempt < 100; attempt++) {
-        int x = random_between_from_stdlib(0, width - 1);
-        int y = random_between_from_stdlib(0, height - 1);
+        int x = random_between_from_stdlib(0, width);
+        int y = random_between_from_stdlib(0, height);
         int grid_offset = map_grid_offset(x, y);
         if (map_grid_is_valid_offset(grid_offset)) {
             log_info("Wallpaper: recenter to grid offset", 0, grid_offset);
