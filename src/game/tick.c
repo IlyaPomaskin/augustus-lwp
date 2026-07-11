@@ -39,6 +39,7 @@
 #include "figure/formation.h"
 #include "figuretype/crime.h"
 #include "game/file.h"
+#include "game/game.h"
 #include "game/settings.h"
 #include "game/time.h"
 #include "game/tutorial.h"
@@ -114,7 +115,7 @@ static void advance_month(void)
     city_games_decrement_month_counts();
     city_gods_update_blessings();
     tutorial_on_month_tick();
-    if (setting_monthly_autosave()) {
+    if (!game_wallpaper_mode() && setting_monthly_autosave()) {
         game_file_write_saved_game(dir_append_location("autosave.svx", PATH_LOCATION_SAVEGAME));
     }
 
@@ -134,7 +135,8 @@ static void advance_day(void)
         building_lighthouse_consume_timber();
     }
     tutorial_on_day_tick();
-    if (config_get(CONFIG_GP_CH_YEARLY_AUTOSAVE) && game_time_month() == 11 && game_time_day() == 15) {
+    if (!game_wallpaper_mode() && config_get(CONFIG_GP_CH_YEARLY_AUTOSAVE) &&
+        game_time_month() == 11 && game_time_day() == 15) {
         // 0-based index so 11 = December, 15 = last day of the month
         game_file_make_yearly_autosave();
     }

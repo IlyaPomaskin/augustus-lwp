@@ -685,8 +685,7 @@ static void setup(const augustus_args *args)
 
     int result;
     if (args->wallpaper) {
-        SDL_Log("Wallpaper mode requested (stub: falling through to normal init)");
-        result = game_init();
+        result = game_init_wallpaper();
     } else if (args->launch_asset_previewer) {
         result = window_asset_previewer_show();
     } else {

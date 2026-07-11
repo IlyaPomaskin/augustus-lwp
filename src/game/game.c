@@ -4,6 +4,7 @@
 #include "building/properties.h"
 #include "city/view.h"
 #include "core/config.h"
+#include "core/dir.h"
 #include "core/hotkey_config.h"
 #include "core/image.h"
 #include "core/lang.h"
@@ -12,6 +13,7 @@
 #include "core/random.h"
 #include "core/string.h"
 #include "editor/editor.h"
+#include "figure/formation.h"
 #include "figure/type.h"
 #include "game/animation.h"
 #include "game/campaign.h"
@@ -34,6 +36,7 @@
 #include "sound/city.h"
 #include "sound/system.h"
 #include "translation/translation.h"
+#include "window/city.h"
 #include "window/editor/map.h"
 #include "window/logo.h"
 #include "window/main_menu.h"
@@ -76,6 +79,18 @@ static encoding_type update_encoding(int is_editor)
     font_set_encoding(encoding);
     translation_load(language);
     return encoding;
+}
+
+static int wallpaper_mode;
+
+int game_wallpaper_mode(void)
+{
+    return wallpaper_mode;
+}
+
+void game_set_wallpaper_mode(int enabled)
+{
+    wallpaper_mode = enabled;
 }
 
 int game_pre_init(void)
@@ -158,6 +173,46 @@ int game_init(void)
     }
 
     window_logo_show(actions);
+    return 1;
+}
+
+int game_init_wallpaper(void)
+{
+    game_set_wallpaper_mode(1);
+
+    if (!image_load_climate(CLIMATE_CENTRAL, 0, 1, 0)) {
+        errlog("unable to load main graphics");
+        return 0;
+    }
+    if (!image_load_enemy(ENEMY_0_BARBARIAN)) {
+        errlog("unable to load enemy graphics");
+        return 0;
+    }
+    if (!image_load_fonts(encoding_get())) {
+        if (encoding_get() != ENCODING_KOREAN && encoding_get() != ENCODING_JAPANESE) {
+            errlog("unable to load font graphics");
+            return 0;
+        }
+    }
+    model_reset();
+    building_properties_init();
+    load_augustus_messages();
+    sound_system_init();
+    game_state_init();
+    resource_init();
+
+    const char *save_path = dir_get_file_at_location("wallpaper.svx", PATH_LOCATION_SAVEGAME);
+    if (!save_path) {
+        errlog("wallpaper mode: 'wallpaper.svx' not found in the save-game folder");
+        return 0;
+    }
+    log_info("Wallpaper: loading save", save_path, 0);
+    if (game_file_load_saved_game(save_path) != FILE_LOAD_SUCCESS) {
+        errlog("wallpaper mode: failed to load 'wallpaper.svx'");
+        return 0;
+    }
+    formation_set_selected(0); // a loaded save may have a legion selected; keep the map view clean
+    window_city_show();
     return 1;
 }
 

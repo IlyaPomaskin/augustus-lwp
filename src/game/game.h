@@ -5,6 +5,19 @@ int game_pre_init(void);
 
 int game_init(void);
 
+/**
+ * Initializes the game for live-wallpaper mode: loads the wallpaper save and
+ * shows the wallpaper city window. Returns 1 on success, 0 on failure.
+ */
+int game_init_wallpaper(void);
+
+/**
+ * @return 1 if the game is running in live-wallpaper mode
+ */
+int game_wallpaper_mode(void);
+
+void game_set_wallpaper_mode(int enabled);
+
 int game_init_editor(void);
 
 int game_reload_language(void);
