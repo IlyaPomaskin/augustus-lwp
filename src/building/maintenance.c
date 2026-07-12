@@ -14,6 +14,7 @@
 #include "core/calc.h"
 #include "core/random.h"
 #include "figuretype/migrant.h"
+#include "game/game.h"
 #include "game/state.h"
 #include "game/tutorial.h"
 #include "game/undo.h"
@@ -169,6 +170,9 @@ static void fire_building(building *b)
 
 void building_maintenance_check_fire_collapse(void)
 {
+    if (game_wallpaper_mode()) {
+        return;
+    }
     city_sentiment_reset_protesters_criminals();
 
     scenario_climate climate = scenario_property_climate();
