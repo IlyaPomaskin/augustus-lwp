@@ -81,8 +81,8 @@ public class AssetSelectionActivity extends AppCompatActivity {
     private static final int[] SCALE_PERCENTS = {200, 100, 67, 50, 40, 33};
     private static final int SCALE_DEFAULT_PERCENT = 100;
     // Simulation-speed dropdown writes an index into the engine's game_speeds table
-    // {10,20,30,40,50,60,70,80,90,100,...}; 70/80/90/100% -> indices 6/7/8/9.
-    private static final int[] SPEED_INDICES = {6, 7, 8, 9};
+    // {10,20,30,40,50,60,70,80,90,100,200,...}; 50/70/100/200% -> indices 4/6/9/10.
+    private static final int[] SPEED_INDICES = {4, 6, 9, 10};
     private static final int SPEED_DEFAULT_INDEX = 9;  // 100%
 
     private static final String SDL_ACTIVITY_CLASS_NAME = "org.libsdl.app.SDLActivity";
