@@ -313,6 +313,8 @@ void game_exit(void)
 {
     video_shutdown();
     settings_save();
-    config_save();
+    if (!game_wallpaper_mode()) {
+        config_save();
+    }
     sound_system_shutdown();
 }

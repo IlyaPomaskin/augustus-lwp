@@ -177,6 +177,7 @@ public class AssetSelectionActivity extends AppCompatActivity {
 
     private void writeConfigKey(String key, int value) {
         File ini = new File(c3Dir(), INI_NAME);
+        c3Dir().mkdirs();
         LinkedHashMap<String, String> keyValues = new LinkedHashMap<>();
         if (ini.exists()) {
             try (BufferedReader reader = new BufferedReader(new FileReader(ini))) {
