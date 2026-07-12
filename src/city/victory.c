@@ -6,6 +6,7 @@
 #include "city/finance.h"
 #include "city/message.h"
 #include "core/config.h"
+#include "game/game.h"
 #include "game/time.h"
 #include "scenario/criteria.h"
 #include "scenario/property.h"
@@ -121,6 +122,9 @@ static int determine_victory_state(void)
 
 void city_victory_check(void)
 {
+    if (game_wallpaper_mode()) {
+        return;
+    }
     if (scenario_is_open_play() && !data.force_win && !data.force_lose) {
         return;
     }
