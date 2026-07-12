@@ -9,6 +9,7 @@
 #include "figure/route.h"
 #include "figure/sound.h"
 #include "game/difficulty.h"
+#include "game/game.h"
 #include "map/figure.h"
 #include "sound/effect.h"
 
@@ -447,6 +448,7 @@ void figure_combat_attack_figure_at(figure *f, int grid_offset)
 
         int opponent_category = figure_properties_for_type(opponent->type)->category;
         int attack = 0;
+        int animal_may_attack = (category & FIGURE_CATEGORY_AGGRESSIVE_ANIMAL) && !game_wallpaper_mode();
         if (opponent->state != FIGURE_STATE_ALIVE) {
             attack = 0;
         } else if (opponent->action_state == FIGURE_ACTION_149_CORPSE) {
@@ -463,11 +465,11 @@ void figure_combat_attack_figure_at(figure *f, int grid_offset)
         } else if (category & FIGURE_CATEGORY_HOSTILE && !(category & FIGURE_CATEGORY_CRIMINAL) &&
             opponent_category & FIGURE_CATEGORY_CRIMINAL) {
             attack = 1;
-        } else if (category & FIGURE_CATEGORY_AGGRESSIVE_ANIMAL && opponent_category & FIGURE_CATEGORY_CITIZEN) {
+        } else if (animal_may_attack && opponent_category & FIGURE_CATEGORY_CITIZEN) {
             attack = 1;
-        } else if (category & FIGURE_CATEGORY_AGGRESSIVE_ANIMAL && opponent_category & FIGURE_CATEGORY_ARMED) {
+        } else if (animal_may_attack && opponent_category & FIGURE_CATEGORY_ARMED) {
             attack = 1;
-        } else if (category & FIGURE_CATEGORY_AGGRESSIVE_ANIMAL && opponent_category & FIGURE_CATEGORY_HOSTILE &&
+        } else if (animal_may_attack && opponent_category & FIGURE_CATEGORY_HOSTILE &&
             !(opponent_category & FIGURE_CATEGORY_NATIVE)) {
             attack = 1;
         } else if (can_attack_animal(category, opponent_category, l, opponent)) {

@@ -9,6 +9,7 @@
 #include "figure/formation.h"
 #include "figure/formation_enemy.h"
 #include "figure/route.h"
+#include "game/game.h"
 #include "map/desirability.h"
 #include "map/grid.h"
 #include "map/soldier_strength.h"
@@ -219,6 +220,9 @@ static void update_herd_formation(formation *m, int infinite_wolves_spawning)
             }
             if (m->missile_attack_timeout) {
                 attacking_animals = 1;
+            }
+            if (game_wallpaper_mode()) {
+                attacking_animals = 0;
             }
             break;
         default:
