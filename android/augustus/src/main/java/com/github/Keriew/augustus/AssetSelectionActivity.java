@@ -3,6 +3,7 @@ package com.github.Keriew.augustus;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -42,6 +43,10 @@ public class AssetSelectionActivity extends AppCompatActivity {
     private static final String C3_DIR_NAME = "c3";
     private static final String WALLPAPER_SAVE = "wallpaper.svx";
     private static final int COPY_BUFFER_SIZE = 64 * 1024;
+    // EXTRA_INITIAL_URI hint (API 26+) so the SAF picker opens at Download instead of the
+    // last-used provider (e.g. Google Drive), where the pushed C3 data lives.
+    private static final Uri INITIAL_PICKER_URI =
+            Uri.parse("content://com.android.externalstorage.documents/document/primary%3ADownload");
 
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
@@ -72,7 +77,8 @@ public class AssetSelectionActivity extends AppCompatActivity {
 
         statusText = findViewById(R.id.status_text);
         selectButton = findViewById(R.id.select_button);
-        selectButton.setOnClickListener(v -> treePicker.launch(null));
+        selectButton.setOnClickListener(v ->
+                treePicker.launch(Build.VERSION.SDK_INT >= Build.VERSION_CODES.O ? INITIAL_PICKER_URI : null));
 
         refreshStatus();
     }
