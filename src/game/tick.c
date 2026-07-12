@@ -31,6 +31,7 @@
 #include "city/sentiment.h"
 #include "city/trade.h"
 #include "city/victory.h"
+#include "city/wallpaper_guardian.h"
 #include "core/config.h"
 #include "core/dir.h"
 #include "core/random.h"
@@ -130,6 +131,9 @@ static void advance_day(void)
 
     if (game_time_day() == 0 || game_time_day() == 8) {
         city_sentiment_update();
+    }
+    if (game_wallpaper_mode()) {
+        wallpaper_guardian_update();
     }
     if (game_time_day() == 0 || game_time_day() == 7) {
         building_lighthouse_consume_timber();
