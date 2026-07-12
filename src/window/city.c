@@ -924,9 +924,16 @@ void window_city_draw(void)
     widget_city_draw();
 }
 
+#define WALLPAPER_SHADE_MAX 15
+
 static void draw_foreground_wallpaper(void)
 {
     window_city_draw(); // == widget_city_draw(): the map only, no chrome
+    int brightness = config_get(CONFIG_UI_WALLPAPER_BRIGHTNESS);
+    if (brightness < 100) {
+        int darkness = (100 - brightness) * WALLPAPER_SHADE_MAX / 100;
+        graphics_shade_rect(0, 0, screen_width(), screen_height(), darkness);
+    }
 }
 
 static void handle_input_wallpaper(const mouse *m, const hotkeys *h)

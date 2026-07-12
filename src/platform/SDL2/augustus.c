@@ -266,6 +266,22 @@ static int handle_event_immediate(void *param1, SDL_Event *event)
     }
 }
 
+static unsigned int last_recenter_millis;
+
+static int wallpaper_should_recenter(void)
+{
+    int minutes = config_get(CONFIG_UI_WALLPAPER_MAP_CHANGE_MINUTES);
+    if (minutes <= 0) {
+        return 1; // every switch to home screen
+    }
+    unsigned int now = SDL_GetTicks();
+    if (last_recenter_millis != 0 && now - last_recenter_millis < (unsigned int) minutes * 60u * 1000u) {
+        return 0;
+    }
+    last_recenter_millis = now;
+    return 1;
+}
+
 static void handle_event(SDL_Event *event)
 {
     switch (event->type) {
@@ -390,7 +406,9 @@ static void handle_event(SDL_Event *event)
                 platform_screen_center_window();
             } else if (event->user.code == WALLPAPER_EVENT_HIDE) {
                 if (game_wallpaper_mode()) {
-                    city_view_go_to_random_tile();
+                    if (wallpaper_should_recenter()) {
+                        city_view_go_to_random_tile();
+                    }
 #ifdef __ANDROID__
                     SDL_AndroidSendMessage(0x8000 + 1 /* COMMAND_PAUSE_NOW */, 0);
 #endif
@@ -398,7 +416,17 @@ static void handle_event(SDL_Event *event)
             } else if (event->user.code == WALLPAPER_EVENT_RESIZE_DISPLAY) {
                 // SDL's own resize path handles this; no-op here.
             } else if (event->user.code == WALLPAPER_EVENT_UPDATE_CONFIGS) {
-                // Phase 3; no-op in Phase 2.
+                if (game_wallpaper_mode()) {
+                    config_load(); // re-read augustus.ini edited by the settings screen
+                    int scale = config_get(CONFIG_UI_WALLPAPER_SCALE);
+                    if (scale > 0) {
+                        city_view_set_scale(scale);
+                    }
+                    int speed = config_get(CONFIG_UI_WALLPAPER_SPEED);
+                    if (speed > 0) {
+                        setting_set_game_speed(speed);
+                    }
+                }
             }
             break;
 
