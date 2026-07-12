@@ -61,3 +61,6 @@ res/augustus.icns
 
 # live-wallpaper QA automation output
 qa_out/
+
+# local Caesar III data + saves for wallpaper QA (not part of the repo)
+_data/
