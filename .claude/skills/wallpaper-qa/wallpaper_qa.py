@@ -237,7 +237,8 @@ class Wallpaper:
         return self._log("assert_set OK (Augustus is the live wallpaper)")
 
     def recenter_count(self):
-        return self._sh("logcat -d").count(RECENTER_MARK)
+        log = self._sh("logcat -d")
+        return log.count(RECENTER_MARK) + log.count(POI_MARK)
 
     def assert_recentered(self, at_least=1):
         n = self.recenter_count()

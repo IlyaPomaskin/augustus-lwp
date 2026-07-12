@@ -2,7 +2,7 @@
 #define PLATFORM_ANDROID_H
 
 // SDL_USEREVENT codes bridging Android wallpaper lifecycle callbacks (SDLActivity.
-// pushWallpaperEvent(), values 0/1/2) into the game's event loop (platform/SDL2/augustus.c).
+// pushWallpaperEvent(), values 0/1/2/3) into the game's event loop (platform/SDL2/augustus.c).
 // Offset above the desktop USER_EVENT_* range (0-4, see that file) so the two code spaces
 // pushed through the same SDL_USEREVENT queue can never collide.
 #define WALLPAPER_EVENT_CODE_BASE 100

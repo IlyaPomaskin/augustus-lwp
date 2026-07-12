@@ -230,7 +230,7 @@ public class SDLActivity extends WallpaperService implements View.OnSystemUiVisi
         if (!BuildConfig.DEBUG || mPoiReceiver != null) {
             return; // QA-only hook; never exposed in release builds
         }
-        mPoiReceiver = new BroadcastReceiver() {
+        BroadcastReceiver receiver = new BroadcastReceiver() {
             @Override
             public void onReceive(Context context, Intent intent) {
                 Log.v(TAG, "NEXT_POI broadcast received");
@@ -239,10 +239,11 @@ public class SDLActivity extends WallpaperService implements View.OnSystemUiVisi
         };
         IntentFilter filter = new IntentFilter(ACTION_NEXT_POI);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            registerReceiver(mPoiReceiver, filter, Context.RECEIVER_EXPORTED);
+            registerReceiver(receiver, filter, Context.RECEIVER_EXPORTED);
         } else {
-            registerReceiver(mPoiReceiver, filter);
+            registerReceiver(receiver, filter);
         }
+        mPoiReceiver = receiver;
     }
 
     private void unregisterPoiReceiver() {

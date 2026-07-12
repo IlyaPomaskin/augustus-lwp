@@ -192,8 +192,8 @@ JNIEXPORT void JNICALL Java_com_github_Keriew_augustus_AssetSelectionActivity_go
     has_directory = 1;
 }
 
-// Values MUST match WALLPAPER_EVENT_* in SDLActivity.java (0/1/2); translated to the
-// WALLPAPER_EVENT_HIDE/UPDATE_CONFIGS/RESIZE_DISPLAY codes (android.h) before being posted,
+// Values MUST match WALLPAPER_EVENT_* in SDLActivity.java (0/1/2/3); translated to the
+// WALLPAPER_EVENT_HIDE/UPDATE_CONFIGS/RESIZE_DISPLAY/NEXT_POI codes (android.h) before being posted,
 // so they can't collide with the desktop USER_EVENT_* codes sharing the same SDL_USEREVENT type.
 JNIEXPORT void JNICALL Java_org_libsdl_app_SDLActivity_pushWallpaperEvent(JNIEnv *env, jclass cls, jint code)
 {
