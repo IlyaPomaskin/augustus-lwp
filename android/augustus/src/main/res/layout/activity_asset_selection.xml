@@ -47,8 +47,8 @@
                 android:text="@string/scale_title"
                 android:textSize="16sp" />
 
-            <SeekBar
-                android:id="@+id/scale_bar"
+            <Spinner
+                android:id="@+id/scale_spinner"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content" />
 
@@ -83,8 +83,8 @@
                 android:text="@string/speed_title"
                 android:textSize="16sp" />
 
-            <SeekBar
-                android:id="@+id/speed_bar"
+            <Spinner
+                android:id="@+id/speed_spinner"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content" />
 

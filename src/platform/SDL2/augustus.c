@@ -418,9 +418,10 @@ static void handle_event(SDL_Event *event)
             } else if (event->user.code == WALLPAPER_EVENT_UPDATE_CONFIGS) {
                 if (game_wallpaper_mode()) {
                     config_load(); // re-read augustus.ini edited by the settings screen
-                    int scale = config_get(CONFIG_UI_WALLPAPER_SCALE);
-                    if (scale > 0) {
-                        city_view_set_scale(scale);
+                    int scale_multiplier = config_get(CONFIG_UI_WALLPAPER_SCALE);
+                    if (scale_multiplier > 0) {
+                        // dropdown x1..x5 -> city-view scale percent (100..500), clamped by city_view_set_scale
+                        city_view_set_scale(scale_multiplier * 100);
                     }
                     int speed = config_get(CONFIG_UI_WALLPAPER_SPEED);
                     if (speed > 0) {

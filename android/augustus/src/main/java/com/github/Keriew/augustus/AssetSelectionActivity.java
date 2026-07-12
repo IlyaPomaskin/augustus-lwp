@@ -68,14 +68,16 @@ public class AssetSelectionActivity extends AppCompatActivity {
     private static final String K_MAP_CHANGE = "ui_wallpaper_map_change_minutes";
     private static final String K_SPEED = "ui_wallpaper_speed";
 
-    private static final int SCALE_MAX = 200;
-    private static final int SCALE_DEFAULT = 0;
     private static final int BRIGHTNESS_MAX = 100;
     private static final int BRIGHTNESS_DEFAULT = 100;
-    private static final int SPEED_MAX = 200;
-    private static final int SPEED_DEFAULT = 0;
     private static final int MAP_CHANGE_DEFAULT_MINUTES = 0;
     private static final int[] MAP_CHANGE_INTERVAL_MINUTES = {0, 10, 30, 120, 1440};
+    // Scale dropdown x1..x5; native multiplies by 100 to get the city-view scale percent.
+    private static final int[] SCALE_MULTIPLIERS = {1, 2, 3, 4, 5};
+    private static final int SCALE_DEFAULT_MULTIPLIER = 1;
+    // Simulation-speed dropdown: game-speed percent passed straight to setting_set_game_speed.
+    private static final int[] SPEED_PERCENTS = {50, 75, 100, 125, 150};
+    private static final int SPEED_DEFAULT_PERCENT = 100;
 
     private static final String SDL_ACTIVITY_CLASS_NAME = "org.libsdl.app.SDLActivity";
 
@@ -117,34 +119,36 @@ public class AssetSelectionActivity extends AppCompatActivity {
     }
 
     private void setupSettingsControls() {
-        SeekBar scaleBar = findViewById(R.id.scale_bar);
-        scaleBar.setMax(SCALE_MAX);
-        scaleBar.setProgress(readConfigKey(K_SCALE, SCALE_DEFAULT));
-        scaleBar.setOnSeekBarChangeListener(new SimpleSeek(value -> writeConfigKey(K_SCALE, value)));
+        setupChoiceSpinner(R.id.scale_spinner, R.array.scale_options, SCALE_MULTIPLIERS,
+                K_SCALE, SCALE_DEFAULT_MULTIPLIER);
 
         SeekBar brightnessBar = findViewById(R.id.brightness_bar);
         brightnessBar.setMax(BRIGHTNESS_MAX);
         brightnessBar.setProgress(readConfigKey(K_BRIGHTNESS, BRIGHTNESS_DEFAULT));
         brightnessBar.setOnSeekBarChangeListener(new SimpleSeek(value -> writeConfigKey(K_BRIGHTNESS, value)));
 
-        SeekBar speedBar = findViewById(R.id.speed_bar);
-        speedBar.setMax(SPEED_MAX);
-        speedBar.setProgress(readConfigKey(K_SPEED, SPEED_DEFAULT));
-        speedBar.setOnSeekBarChangeListener(new SimpleSeek(value -> writeConfigKey(K_SPEED, value)));
+        setupChoiceSpinner(R.id.speed_spinner, R.array.speed_options, SPEED_PERCENTS,
+                K_SPEED, SPEED_DEFAULT_PERCENT);
 
-        Spinner mapChangeSpinner = findViewById(R.id.map_change_spinner);
-        mapChangeSpinner.setAdapter(ArrayAdapter.createFromResource(this, R.array.map_change_options,
+        setupChoiceSpinner(R.id.map_change_spinner, R.array.map_change_options, MAP_CHANGE_INTERVAL_MINUTES,
+                K_MAP_CHANGE, MAP_CHANGE_DEFAULT_MINUTES);
+    }
+
+    // Binds a spinner whose options map 1:1 to `values`; writes values[selected] to the config key.
+    private void setupChoiceSpinner(int spinnerId, int arrayResId, int[] values, String key, int defaultValue) {
+        Spinner spinner = findViewById(spinnerId);
+        spinner.setAdapter(ArrayAdapter.createFromResource(this, arrayResId,
                 android.R.layout.simple_spinner_dropdown_item));
-        int currentMapChangeMinutes = readConfigKey(K_MAP_CHANGE, MAP_CHANGE_DEFAULT_MINUTES);
-        for (int i = 0; i < MAP_CHANGE_INTERVAL_MINUTES.length; i++) {
-            if (MAP_CHANGE_INTERVAL_MINUTES[i] == currentMapChangeMinutes) {
-                mapChangeSpinner.setSelection(i);
+        int current = readConfigKey(key, defaultValue);
+        for (int i = 0; i < values.length; i++) {
+            if (values[i] == current) {
+                spinner.setSelection(i);
             }
         }
-        mapChangeSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+        spinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
             @Override
             public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
-                writeConfigKey(K_MAP_CHANGE, MAP_CHANGE_INTERVAL_MINUTES[position]);
+                writeConfigKey(key, values[position]);
             }
 
             @Override
