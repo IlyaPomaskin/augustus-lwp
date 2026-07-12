@@ -66,7 +66,7 @@ public class AssetSelectionActivity extends AppCompatActivity {
     private static final String K_SCALE = "ui_wallpaper_scale";
     private static final String K_BRIGHTNESS = "ui_wallpaper_brightness";
     private static final String K_MAP_CHANGE = "ui_wallpaper_map_change_minutes";
-    private static final String K_SPEED = "ui_wallpaper_speed";
+    private static final String K_SPEED = "gameplay_change_default_game_speed";
     private static final String K_WEATHER = "ui_draw_weather";
     private static final int WEATHER_DEFAULT = 1;  // 1 = on
     private static final String K_CLOUDS = "ui_draw_cloud_shadows";
@@ -80,9 +80,10 @@ public class AssetSelectionActivity extends AppCompatActivity {
     // scale dropdown x0.5..x3 -> city-view scale percent (magnification ~= 100/scale)
     private static final int[] SCALE_PERCENTS = {200, 100, 67, 50, 40, 33};
     private static final int SCALE_DEFAULT_PERCENT = 100;
-    // Simulation-speed dropdown: game-speed percent passed straight to setting_set_game_speed.
-    private static final int[] SPEED_PERCENTS = {75, 100, 125};
-    private static final int SPEED_DEFAULT_PERCENT = 100;
+    // Simulation-speed dropdown writes an index into the engine's game_speeds table
+    // {10,20,30,40,50,60,70,80,90,100,...}; 70/80/90/100% -> indices 6/7/8/9.
+    private static final int[] SPEED_INDICES = {6, 7, 8, 9};
+    private static final int SPEED_DEFAULT_INDEX = 9;  // 100%
 
     private static final String SDL_ACTIVITY_CLASS_NAME = "org.libsdl.app.SDLActivity";
 
@@ -132,8 +133,8 @@ public class AssetSelectionActivity extends AppCompatActivity {
         brightnessBar.setProgress(readConfigKey(K_BRIGHTNESS, BRIGHTNESS_DEFAULT));
         brightnessBar.setOnSeekBarChangeListener(new SimpleSeek(value -> writeConfigKey(K_BRIGHTNESS, value)));
 
-        setupChoiceSpinner(R.id.speed_spinner, R.array.speed_options, SPEED_PERCENTS,
-                K_SPEED, SPEED_DEFAULT_PERCENT);
+        setupChoiceSpinner(R.id.speed_spinner, R.array.speed_options, SPEED_INDICES,
+                K_SPEED, SPEED_DEFAULT_INDEX);
 
         setupSwitch(R.id.weather_switch, K_WEATHER, WEATHER_DEFAULT);
         setupSwitch(R.id.clouds_switch, K_CLOUDS, CLOUDS_DEFAULT);

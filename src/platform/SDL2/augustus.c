@@ -424,10 +424,7 @@ static void handle_event(SDL_Event *event)
                         // 200..33; lower % = more zoomed in). clamped by city_view_set_scale.
                         city_view_set_scale(scale);
                     }
-                    int speed = config_get(CONFIG_UI_WALLPAPER_SPEED);
-                    if (speed > 0) {
-                        setting_set_game_speed(speed);
-                    }
+                    setting_set_default_game_speed(); // applies CONFIG_GP_CH_DEFAULT_GAME_SPEED
                 }
             }
             break;
