@@ -427,6 +427,12 @@ static void handle_event(SDL_Event *event)
                     }
                     setting_set_default_game_speed(); // applies CONFIG_GP_CH_DEFAULT_GAME_SPEED
                 }
+            } else if (event->user.code == WALLPAPER_EVENT_NEXT_POI) {
+                // Debug/QA broadcast: advance immediately, deliberately NOT gated
+                // by wallpaper_should_recenter().
+                if (game_wallpaper_mode()) {
+                    wallpaper_poi_next();
+                }
             }
             break;
 
