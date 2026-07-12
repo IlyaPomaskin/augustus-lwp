@@ -132,6 +132,10 @@ static const char *ini_keys[] = {
     [CONFIG_GP_CH_HOUSING_DO_NOT_SPAWN_DOGS] = "gameplay_change_houses_do_not_spawn_dogs",
     [CONFIG_UI_SHOW_SHORELINE_DESIRABILITY] = "ui_show_shoreline_desirability",
     [CONFIG_UI_SHOW_ELEVATION_DESIRABILITY] = "ui_show_elevation_desirability",
+    [CONFIG_UI_WALLPAPER_SCALE] = "ui_wallpaper_scale",
+    [CONFIG_UI_WALLPAPER_BRIGHTNESS] = "ui_wallpaper_brightness",
+    [CONFIG_UI_WALLPAPER_MAP_CHANGE_MINUTES] = "ui_wallpaper_map_change_minutes",
+    [CONFIG_UI_WALLPAPER_SPEED] = "ui_wallpaper_speed",
 };
 
 static const char *ini_string_keys[] = {
@@ -205,7 +209,11 @@ static int default_values[CONFIG_MAX_ENTRIES] = {
     [CONFIG_UI_WT_PREVIEW_HEAVY_RAIN] = 0,
     [CONFIG_UI_WT_SANDSTORM_SIZE] = 0,
     [CONFIG_UI_WT_SNOWFLAKE_SIZE] = 2,
-    [CONFIG_UI_WT_WEATHER_DURATION] = 1
+    [CONFIG_UI_WT_WEATHER_DURATION] = 1,
+    [CONFIG_UI_WALLPAPER_SCALE] = 0,
+    [CONFIG_UI_WALLPAPER_BRIGHTNESS] = 100,
+    [CONFIG_UI_WALLPAPER_MAP_CHANGE_MINUTES] = 0,
+    [CONFIG_UI_WALLPAPER_SPEED] = 0
 };
 
 static const char default_string_values[CONFIG_STRING_MAX_ENTRIES][CONFIG_STRING_VALUE_MAX] = { 0 };
