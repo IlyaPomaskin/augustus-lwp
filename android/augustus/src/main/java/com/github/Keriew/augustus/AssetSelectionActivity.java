@@ -69,6 +69,8 @@ public class AssetSelectionActivity extends AppCompatActivity {
     private static final String K_SPEED = "ui_wallpaper_speed";
     private static final String K_WEATHER = "ui_draw_weather";
     private static final int WEATHER_DEFAULT = 1;  // 1 = on
+    private static final String K_CLOUDS = "ui_draw_cloud_shadows";
+    private static final int CLOUDS_DEFAULT = 1;  // 1 = on (ambient shadows suit a wallpaper; engine default is off)
 
     private static final int BRIGHTNESS_MAX = 100;
     private static final int BRIGHTNESS_DEFAULT = 100;
@@ -134,6 +136,7 @@ public class AssetSelectionActivity extends AppCompatActivity {
                 K_SPEED, SPEED_DEFAULT_PERCENT);
 
         setupSwitch(R.id.weather_switch, K_WEATHER, WEATHER_DEFAULT);
+        setupSwitch(R.id.clouds_switch, K_CLOUDS, CLOUDS_DEFAULT);
 
         setupChoiceSpinner(R.id.map_change_spinner, R.array.map_change_options, MAP_CHANGE_INTERVAL_MINUTES,
                 K_MAP_CHANGE, MAP_CHANGE_DEFAULT_MINUTES);
@@ -165,7 +168,9 @@ public class AssetSelectionActivity extends AppCompatActivity {
     // Binds a boolean Switch to a config key (1 = on/checked).
     private void setupSwitch(int switchId, String key, int defaultValue) {
         android.widget.CompoundButton sw = findViewById(switchId);
-        sw.setChecked(readConfigKey(key, defaultValue) != 0);
+        int value = readConfigKey(key, defaultValue);
+        writeConfigKey(key, value);  // seed the config so the default applies before any toggle
+        sw.setChecked(value != 0);
         sw.setOnCheckedChangeListener((btn, checked) -> writeConfigKey(key, checked ? 1 : 0));
     }
 

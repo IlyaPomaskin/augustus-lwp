@@ -17,6 +17,7 @@
     <string name="map_change_2h">2 hours</string>
     <string name="map_change_24h">24 hours</string>
     <string name="speed_title">Simulation speed</string>
+    <string name="clouds_title">Cloud shadows</string>
     <string name="weather_title">Weather</string>
     <string name="set_wallpaper_button">Set wallpaper</string>
 
