@@ -7,4 +7,23 @@
     <string name="asset_status_copying">Copying Caesar 3 files…</string>
     <string name="asset_status_ready">Caesar 3 files installed. Ready to use as a live wallpaper.</string>
     <string name="asset_status_error">Copy failed: %1$s</string>
+
+    <string name="scale_title">Scale</string>
+    <string name="brightness_title">Brightness</string>
+    <string name="map_change_title">Map change interval</string>
+    <string name="map_change_every_switch">Every switch to home screen</string>
+    <string name="map_change_10min">10 minutes</string>
+    <string name="map_change_30min">30 minutes</string>
+    <string name="map_change_2h">2 hours</string>
+    <string name="map_change_24h">24 hours</string>
+    <string name="speed_title">Simulation speed</string>
+    <string name="set_wallpaper_button">Set wallpaper</string>
+
+    <string-array name="map_change_options">
+        <item>@string/map_change_every_switch</item>
+        <item>@string/map_change_10min</item>
+        <item>@string/map_change_30min</item>
+        <item>@string/map_change_2h</item>
+        <item>@string/map_change_24h</item>
+    </string-array>
 </resources>

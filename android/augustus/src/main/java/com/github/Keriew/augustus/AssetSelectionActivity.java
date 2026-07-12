@@ -1,5 +1,8 @@
 package com.github.Keriew.augustus;
 
+import android.app.WallpaperManager;
+import android.content.ActivityNotFoundException;
+import android.content.ComponentName;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.net.Uri;
@@ -8,7 +11,12 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.util.Log;
+import android.view.View;
+import android.widget.AdapterView;
+import android.widget.ArrayAdapter;
 import android.widget.Button;
+import android.widget.SeekBar;
+import android.widget.Spinner;
 import android.widget.TextView;
 
 import androidx.appcompat.app.AppCompatActivity;
@@ -19,11 +27,17 @@ import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
 import androidx.documentfile.provider.DocumentFile;
 
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileOutputStream;
+import java.io.FileReader;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -47,6 +61,23 @@ public class AssetSelectionActivity extends AppCompatActivity {
     // last-used provider (e.g. Google Drive), where the pushed C3 data lives.
     private static final Uri INITIAL_PICKER_URI =
             Uri.parse("content://com.android.externalstorage.documents/document/primary%3ADownload");
+
+    private static final String INI_NAME = "augustus.ini";
+    private static final String K_SCALE = "ui_wallpaper_scale";
+    private static final String K_BRIGHTNESS = "ui_wallpaper_brightness";
+    private static final String K_MAP_CHANGE = "ui_wallpaper_map_change_minutes";
+    private static final String K_SPEED = "ui_wallpaper_speed";
+
+    private static final int SCALE_MAX = 200;
+    private static final int SCALE_DEFAULT = 0;
+    private static final int BRIGHTNESS_MAX = 100;
+    private static final int BRIGHTNESS_DEFAULT = 100;
+    private static final int SPEED_MAX = 200;
+    private static final int SPEED_DEFAULT = 0;
+    private static final int MAP_CHANGE_DEFAULT_MINUTES = 0;
+    private static final int[] MAP_CHANGE_INTERVAL_MINUTES = {0, 10, 30, 120, 1440};
+
+    private static final String SDL_ACTIVITY_CLASS_NAME = "org.libsdl.app.SDLActivity";
 
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
@@ -81,6 +112,58 @@ public class AssetSelectionActivity extends AppCompatActivity {
                 treePicker.launch(Build.VERSION.SDK_INT >= Build.VERSION_CODES.O ? INITIAL_PICKER_URI : null));
 
         refreshStatus();
+        setupSettingsControls();
+        setupSetWallpaperButton();
+    }
+
+    private void setupSettingsControls() {
+        SeekBar scaleBar = findViewById(R.id.scale_bar);
+        scaleBar.setMax(SCALE_MAX);
+        scaleBar.setProgress(readConfigKey(K_SCALE, SCALE_DEFAULT));
+        scaleBar.setOnSeekBarChangeListener(new SimpleSeek(value -> writeConfigKey(K_SCALE, value)));
+
+        SeekBar brightnessBar = findViewById(R.id.brightness_bar);
+        brightnessBar.setMax(BRIGHTNESS_MAX);
+        brightnessBar.setProgress(readConfigKey(K_BRIGHTNESS, BRIGHTNESS_DEFAULT));
+        brightnessBar.setOnSeekBarChangeListener(new SimpleSeek(value -> writeConfigKey(K_BRIGHTNESS, value)));
+
+        SeekBar speedBar = findViewById(R.id.speed_bar);
+        speedBar.setMax(SPEED_MAX);
+        speedBar.setProgress(readConfigKey(K_SPEED, SPEED_DEFAULT));
+        speedBar.setOnSeekBarChangeListener(new SimpleSeek(value -> writeConfigKey(K_SPEED, value)));
+
+        Spinner mapChangeSpinner = findViewById(R.id.map_change_spinner);
+        mapChangeSpinner.setAdapter(ArrayAdapter.createFromResource(this, R.array.map_change_options,
+                android.R.layout.simple_spinner_dropdown_item));
+        int currentMapChangeMinutes = readConfigKey(K_MAP_CHANGE, MAP_CHANGE_DEFAULT_MINUTES);
+        for (int i = 0; i < MAP_CHANGE_INTERVAL_MINUTES.length; i++) {
+            if (MAP_CHANGE_INTERVAL_MINUTES[i] == currentMapChangeMinutes) {
+                mapChangeSpinner.setSelection(i);
+            }
+        }
+        mapChangeSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
+                writeConfigKey(K_MAP_CHANGE, MAP_CHANGE_INTERVAL_MINUTES[position]);
+            }
+
+            @Override
+            public void onNothingSelected(AdapterView<?> parent) {
+            }
+        });
+    }
+
+    private void setupSetWallpaperButton() {
+        findViewById(R.id.set_wallpaper_button).setOnClickListener(v -> {
+            Intent intent = new Intent(WallpaperManager.ACTION_CHANGE_LIVE_WALLPAPER);
+            intent.putExtra(WallpaperManager.EXTRA_LIVE_WALLPAPER_COMPONENT,
+                    new ComponentName(this, SDL_ACTIVITY_CLASS_NAME));
+            try {
+                startActivity(intent);
+            } catch (ActivityNotFoundException e) {
+                startActivity(new Intent(WallpaperManager.ACTION_LIVE_WALLPAPER_CHOOSER));
+            }
+        });
     }
 
     private void refreshStatus() {
@@ -90,6 +173,55 @@ public class AssetSelectionActivity extends AppCompatActivity {
 
     private File c3Dir() {
         return new File(getFilesDir(), C3_DIR_NAME);
+    }
+
+    private void writeConfigKey(String key, int value) {
+        File ini = new File(c3Dir(), INI_NAME);
+        LinkedHashMap<String, String> keyValues = new LinkedHashMap<>();
+        if (ini.exists()) {
+            try (BufferedReader reader = new BufferedReader(new FileReader(ini))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    int eq = line.indexOf('=');
+                    if (eq > 0) {
+                        keyValues.put(line.substring(0, eq), line.substring(eq + 1));
+                    }
+                }
+            } catch (IOException e) {
+                Log.e(TAG, "read ini", e);
+            }
+        }
+        keyValues.put(key, Integer.toString(value));
+        try (BufferedWriter writer = new BufferedWriter(new FileWriter(ini))) {
+            for (Map.Entry<String, String> entry : keyValues.entrySet()) {
+                writer.write(entry.getKey() + "=" + entry.getValue() + "\n");
+            }
+        } catch (IOException e) {
+            Log.e(TAG, "write ini", e);
+        }
+    }
+
+    private int readConfigKey(String key, int fallback) {
+        File ini = new File(c3Dir(), INI_NAME);
+        if (!ini.exists()) {
+            return fallback;
+        }
+        try (BufferedReader reader = new BufferedReader(new FileReader(ini))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                int eq = line.indexOf('=');
+                if (eq > 0 && line.substring(0, eq).equals(key)) {
+                    try {
+                        return Integer.parseInt(line.substring(eq + 1).trim());
+                    } catch (NumberFormatException nfe) {
+                        return fallback;
+                    }
+                }
+            }
+        } catch (IOException e) {
+            Log.e(TAG, "read ini", e);
+        }
+        return fallback;
     }
 
     private void startCopy(Uri treeUri) {
@@ -177,4 +309,30 @@ public class AssetSelectionActivity extends AppCompatActivity {
     public native void gotDirectory();
 
     public native void releaseAssetManager();
+
+    private interface IntConsumer {
+        void accept(int value);
+    }
+
+    /** Writes the SeekBar's value only once the user releases it, not on every pixel of drag. */
+    private static class SimpleSeek implements SeekBar.OnSeekBarChangeListener {
+        private final IntConsumer onRelease;
+
+        private SimpleSeek(IntConsumer onRelease) {
+            this.onRelease = onRelease;
+        }
+
+        @Override
+        public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+        }
+
+        @Override
+        public void onStartTrackingTouch(SeekBar seekBar) {
+        }
+
+        @Override
+        public void onStopTrackingTouch(SeekBar seekBar) {
+            onRelease.accept(seekBar.getProgress());
+        }
+    }
 }

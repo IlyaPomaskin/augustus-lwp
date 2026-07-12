@@ -39,6 +39,61 @@
                 android:layout_marginTop="16dp"
                 android:textSize="16sp"
                 android:textStyle="bold" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="24dp"
+                android:text="@string/scale_title"
+                android:textSize="16sp" />
+
+            <SeekBar
+                android:id="@+id/scale_bar"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:text="@string/brightness_title"
+                android:textSize="16sp" />
+
+            <SeekBar
+                android:id="@+id/brightness_bar"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:text="@string/map_change_title"
+                android:textSize="16sp" />
+
+            <Spinner
+                android:id="@+id/map_change_spinner"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:text="@string/speed_title"
+                android:textSize="16sp" />
+
+            <SeekBar
+                android:id="@+id/speed_bar"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content" />
+
+            <Button
+                android:id="@+id/set_wallpaper_button"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="24dp"
+                android:text="@string/set_wallpaper_button" />
         </LinearLayout>
     </ScrollView>
 </LinearLayout>
