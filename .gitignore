@@ -58,3 +58,6 @@ ext/SDL2/*.zip
 ext/SDL2/*.tar.gz
 
 res/augustus.icns
+
+# live-wallpaper QA automation output
+qa_out/
