@@ -32,6 +32,7 @@
 #include "platform/file_manager.h"
 #include "platform/prefs.h"
 #include "platform/user_path.h"
+#include "scenario/invasion.h"
 #include "scenario/property.h"
 #include "scenario/scenario.h"
 #include "sound/city.h"
@@ -212,6 +213,7 @@ int game_init_wallpaper(void)
         errlog("wallpaper mode: failed to load 'wallpaper.svx'");
         return 0;
     }
+    scenario_invasion_clear(); // wallpaper: drop any invasions scheduled in the save
     formation_set_selected(0); // a loaded save may have a legion selected; keep the map view clean
     window_city_wallpaper_show();
     wallpaper_poi_invalidate();

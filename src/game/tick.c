@@ -86,7 +86,9 @@ static void advance_month(void)
     city_finance_handle_month_change();
     city_resource_consume_food();
     scenario_distant_battle_process();
-    scenario_invasion_process();
+    if (!game_wallpaper_mode()) {
+        scenario_invasion_process();
+    }
     scenario_request_process();
     scenario_demand_change_process();
     scenario_price_change_process();
