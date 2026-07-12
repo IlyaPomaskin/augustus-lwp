@@ -64,3 +64,6 @@ qa_out/
 
 # local Caesar III data + saves for wallpaper QA (not part of the repo)
 _data/
+
+# Claude Code sandbox profile
+claude-cli.sb
