@@ -67,6 +67,8 @@ public class AssetSelectionActivity extends AppCompatActivity {
     private static final String K_BRIGHTNESS = "ui_wallpaper_brightness";
     private static final String K_MAP_CHANGE = "ui_wallpaper_map_change_minutes";
     private static final String K_SPEED = "ui_wallpaper_speed";
+    private static final String K_WEATHER = "ui_draw_weather";
+    private static final int WEATHER_DEFAULT = 1;  // 1 = on
 
     private static final int BRIGHTNESS_MAX = 100;
     private static final int BRIGHTNESS_DEFAULT = 100;
@@ -131,6 +133,8 @@ public class AssetSelectionActivity extends AppCompatActivity {
         setupChoiceSpinner(R.id.speed_spinner, R.array.speed_options, SPEED_PERCENTS,
                 K_SPEED, SPEED_DEFAULT_PERCENT);
 
+        setupSwitch(R.id.weather_switch, K_WEATHER, WEATHER_DEFAULT);
+
         setupChoiceSpinner(R.id.map_change_spinner, R.array.map_change_options, MAP_CHANGE_INTERVAL_MINUTES,
                 K_MAP_CHANGE, MAP_CHANGE_DEFAULT_MINUTES);
     }
@@ -156,6 +160,13 @@ public class AssetSelectionActivity extends AppCompatActivity {
             public void onNothingSelected(AdapterView<?> parent) {
             }
         });
+    }
+
+    // Binds a boolean Switch to a config key (1 = on/checked).
+    private void setupSwitch(int switchId, String key, int defaultValue) {
+        android.widget.CompoundButton sw = findViewById(switchId);
+        sw.setChecked(readConfigKey(key, defaultValue) != 0);
+        sw.setOnCheckedChangeListener((btn, checked) -> writeConfigKey(key, checked ? 1 : 0));
     }
 
     private void setupSetWallpaperButton() {

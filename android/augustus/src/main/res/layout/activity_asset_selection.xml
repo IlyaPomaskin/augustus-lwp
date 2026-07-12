@@ -88,6 +88,13 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content" />
 
+            <Switch
+                android:id="@+id/weather_switch"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:text="@string/weather_title" />
+
             <Button
                 android:id="@+id/set_wallpaper_button"
                 android:layout_width="match_parent"
