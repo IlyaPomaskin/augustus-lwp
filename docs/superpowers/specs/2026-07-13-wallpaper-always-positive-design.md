@@ -55,9 +55,16 @@ Per invocation it clamps the "soft" city metrics using existing public APIs
 | Unrest / rioters | `city_sentiment_set_happiness(100)` (`sentiment.h:10`) + `city_sentiment_reset_protesters_criminals()` (`sentiment.h:17`) |
 | Disease / plague | `city_health_set(100)` (`health.h` / `health.c:34`) |
 | Bankruptcy | `if (city_finance_treasury() < TREASURY_FLOOR) city_finance_treasury_add(...)` (`finance.h:34,36`) |
+| God wrath (Mars→invasion, Venus→criminals, Neptune→sunk ships) | `city_god_set_happiness(GOD_ALL, 100)` (`gods.h:18`, `GOD_ALL` in `constants.h:58`) |
 
-`TREASURY_FLOOR` is a named constant (small positive value, e.g. 1000) — no magic
-numbers.
+`TREASURY_FLOOR` and `GUARDIAN_MAX_GOD_MOOD` are named constants (no magic numbers).
+
+**God wrath (added after whole-branch review):** gods drift wrathful independently of
+the metrics above, and Mars wrath calls `scenario_invasion_start_from_mars()` which
+spawns enemies *bypassing* the §3 invasion guard — an emergent path not gated by save
+curation. Clamping every god's mood to 100 daily is a source fix: a god with happiness
+≥ 50 has its `wrath_bolts` forced to 0 (`gods.c:209-210`), so wrath never accumulates
+and no curse (invasion, criminals, ship sinking) ever fires.
 
 **Cadence & hook:** called from `advance_day()` in `src/game/tick.c`, immediately
 after the existing `city_sentiment_update()` block (`tick.c:131-133`), behind
@@ -83,6 +90,12 @@ Each is a single early `game_wallpaper_mode()` check:
   (`src/building/maintenance.c:170`): add `if (game_wallpaper_mode()) return;` at the
   top. `fire_risk`/`damage_risk` never accrue, so nothing ignites (>100) or collapses
   (>200).
+- **Scenario-scripted disasters (added after whole-branch review)** — guard each call
+  in `src/game/tick.c` with `if (!game_wallpaper_mode())`: `scenario_random_event_process()`
+  (destructive random events — mine/clay-pit collapse), `scenario_earthquake_process()`
+  (building destruction), `scenario_gladiator_revolt_process()` (spawns hostile
+  gladiators). These previously relied silently on save curation; guarding them makes
+  "always positive" robust regardless of the loaded `wallpaper.svx`.
 
 ### 3. Invasions
 
@@ -108,9 +121,10 @@ Wolves (`FIGURE_CATEGORY_AGGRESSIVE_ANIMAL`) attack citizens/soldiers. Two guard
 ### 5. "Overrun" is prevented transitively
 
 Overrun = enemies/rioters destroying buildings and killing population. With no
-invasions (§3, no enemies spawn), sentiment floored (§1, no rioters spawn), and
-wolves pacified (§4), nothing that attacks buildings/citizens ever exists. No
-dedicated overrun mechanism is needed.
+invasions (§3, no enemies spawn — including the Mars-wrath invasion path, now closed
+by the god-mood clamp in §1), sentiment floored (§1, no rioters spawn), wolves
+pacified (§4), and scenario-scripted disasters guarded (§2), nothing that attacks
+buildings/citizens ever exists. No dedicated overrun mechanism is needed.
 
 ### 6. Build
 
