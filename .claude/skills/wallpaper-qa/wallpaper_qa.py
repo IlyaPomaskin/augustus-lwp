@@ -50,6 +50,7 @@ SETTINGS_ACTIVITY = f"{PKG}/com.github.Keriew.augustus.AssetSelectionActivity"
 CHOOSER_PKG = "com.android.wallpaper.livepicker"
 INI_REMOTE = "files/c3/augustus.ini"        # relative to run-as home
 INI_STAGE = "/sdcard/Download/augustus.ini"
+LOGFILE_REMOTE = "files/c3/augustus-log.txt"  # native log_info sink (NOT logcat)
 
 # friendly setting alias -> real augustus.ini key (int values)
 SETTINGS = {
@@ -72,6 +73,10 @@ class Wallpaper:
             "~/Library/Android/sdk/platform-tools/adb"))
         self.outdir = outdir or os.path.join(os.getcwd(), "qa_out")
         os.makedirs(self.outdir, exist_ok=True)
+        # Baseline native-marker counts, snapshotted by logcat_clear(); the
+        # recenter/poi counts report the delta since that baseline.
+        self._base_recenter = 0
+        self._base_poi = 0
 
     # ---- low-level adb ----
     def _adb(self, *args, capture=False):
@@ -84,6 +89,16 @@ class Wallpaper:
     def _log(self, msg):
         print(f"  · {msg}")
         return self
+
+    def _marks(self):
+        """(recenter, poi) native-marker counts from the on-device log FILE.
+
+        Augustus native log_info() writes to files/c3/augustus-log.txt and stdout,
+        NOT to logcat (only Java android.util.Log reaches logcat), so recenter/POI
+        markers must be counted from this file, not `logcat`.
+        """
+        log = self._sh(f"run-as {PKG} cat {LOGFILE_REMOTE} 2>/dev/null")
+        return log.count(RECENTER_MARK), log.count(POI_MARK)
 
     # ================= atomic operations =================
 
@@ -209,7 +224,9 @@ class Wallpaper:
 
     def logcat_clear(self):
         self._adb("logcat", "-c")
-        return self._log("logcat cleared")
+        self._base_recenter, self._base_poi = self._marks()
+        return self._log(
+            f"logcat cleared + marker baseline (recenter={self._base_recenter}, poi={self._base_poi})")
 
     def screenshot(self, name):
         path = os.path.join(self.outdir, f"{name}.png")
@@ -237,8 +254,8 @@ class Wallpaper:
         return self._log("assert_set OK (Augustus is the live wallpaper)")
 
     def recenter_count(self):
-        log = self._sh("logcat -d")
-        return log.count(RECENTER_MARK) + log.count(POI_MARK)
+        recenter, poi = self._marks()
+        return (recenter + poi) - (self._base_recenter + self._base_poi)
 
     def assert_recentered(self, at_least=1):
         n = self.recenter_count()
@@ -247,7 +264,8 @@ class Wallpaper:
         return self._log(f"assert_recentered OK ({n} >= {at_least})")
 
     def poi_count(self):
-        return self._sh("logcat -d").count(POI_MARK)
+        _, poi = self._marks()
+        return poi - self._base_poi
 
     def assert_poi_changed(self, at_least=1):
         n = self.poi_count()
