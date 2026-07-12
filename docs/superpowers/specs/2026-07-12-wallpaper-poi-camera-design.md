@@ -2,6 +2,7 @@
 
 Date: 2026-07-12
 Status: Ready for implementation plan
+**Plan-confidence status:** Ready for implementation plan (iteration 1, confidence 91%)
 
 Parent spec: `docs/superpowers/specs/2026-07-11-augustus-live-wallpaper-design.md`
 Prior phase: `docs/superpowers/specs/2026-07-12-augustus-live-wallpaper-phase3-settings-design.md`
@@ -59,20 +60,22 @@ typedef struct { int grid_offset; int score; } wallpaper_poi;
 static wallpaper_poi poi_list[POI_SAMPLE_COUNT];   // final cycled set
 static int poi_count;
 static int poi_index;
-static int scanned_building_count;                 // change-detection vs building_count()
 ```
 
 `wallpaper_poi_next()` (mirrors OpenTTD `PrepareBackground`):
 
-1. If `poi_count == 0` **or** `building_count() != scanned_building_count` →
-   `scan()`; set `poi_index = 0`; record `scanned_building_count = building_count()`.
-2. Else `poi_index = (poi_index + 1) % poi_count`.
-3. If `poi_count == 0` (scan found nothing) → `city_view_go_to_random_tile()`
-   (fallback); return.
-4. Else `city_view_go_to_grid_offset(poi_list[poi_index].grid_offset)` — the
-   engine's instant, boundary-clamped centering (`src/city/view.c:531`).
-5. `log_info("Wallpaper POI", <reason/score>, grid_offset)` so QA and the
-   `next_poi` assertion can observe picks in logcat.
+1. If invalidated (`poi_count == 0`) **or** the list has been fully cycled
+   (advancing would move past the last entry) → `scan()` + re-sample and set
+   `poi_index = 0`. Otherwise `poi_index += 1`. A fresh random sample is thus drawn
+   on load and once per full cycle — no reliance on `building_count()`.
+2. If `poi_count == 0` (scan found nothing) → `city_view_go_to_random_tile()`
+   (fallback) and return; the next advance re-scans, so it self-heals once the
+   city has buildings.
+3. Else center on the POI's footprint-center tile (§B):
+   `city_view_go_to_grid_offset(poi_list[poi_index].grid_offset)` — the engine's
+   instant, boundary-clamped centering (`src/city/view.c:531`).
+4. `log_info("Wallpaper POI", <score>, grid_offset)` so QA and the `next_poi`
+   assertion can observe picks in logcat.
 
 `wallpaper_poi_invalidate()` sets `poi_count = 0` (forces a rescan next call).
 
@@ -84,12 +87,12 @@ only keep the top ~50). Three scanners map OpenTTD's four:
 
 | OpenTTD scanner | Augustus equivalent | Method |
 | --- | --- | --- |
-| Stations (facility + pop + cluster) | **Landmarks** | Iterate notable types via `building_first_of_type(t)` → `next_of_type`; add each `BUILDING_STATE_IN_USE` building at `b->grid_offset` with the type's table score. |
+| Stations (facility + pop + cluster) | **Landmarks** | Iterate notable types via `building_first_of_type(t)` → `next_of_type`; add each `BUILDING_STATE_IN_USE` building at its footprint-center tile with the type's table score. |
 | Towns (pop ≥ threshold, spaced) | **Population density** | Single O(n) pass bucketing houses into `POI_CELL_TILES`-square cells by summed `b->house_population`; each cell over threshold → one candidate at the cell's representative tile, `score = min(POI_POP_SCORE_CAP, cell_pop / POI_POP_PER_POINT)`. |
 | Rail junctions (activity clusters) | **Industry / activity clusters** | Same cell pass counts farms/workshops/warehouses/granaries/docks; cells with ≥ `POI_INDUSTRY_MIN` such buildings → candidate, `score = POI_INDUSTRY_SCORE` (or `POI_INDUSTRY_SCORE_DENSE` when ≥ `POI_INDUSTRY_DENSE`). |
 | Lighthouses (rare 5% high-score pick) | *dropped* | The rare-random-pick mechanic is not ported; those landmarks (incl. the lighthouse) are covered by the Landmarks scanner. |
 
-**Landmark score table** (draft; tunable during implementation). Only
+**Landmark score table** (concrete defaults, fine-tuned in QA). Only
 `BUILDING_STATE_IN_USE`:
 
 | Score | Building types |
@@ -101,14 +104,18 @@ only keep the top ~50). Three scanners map OpenTTD's four:
 | 4 | `THEATER`, `AMPHITHEATER`, `GLADIATOR_SCHOOL`, large temples (`LARGE_TEMPLE_*`), `GOVERNORS_HOUSE`, `TRIUMPHAL_ARCH`, `OBELISK` |
 | 3 | `FORUM`, forts (`FORT_*`) |
 
-Multi-tile buildings are added once at `b->grid_offset` (their origin tile);
-`city_view_go_to_grid_offset` centers the viewport on that tile, which frames the
-whole structure adequately at wallpaper zoom.
+Multi-tile buildings are added once at their footprint-center tile — `b->grid_offset`
+shifted by half the footprint (`b->size / 2`) via `map_grid_add_delta`, falling back
+to `b->grid_offset` if the shifted tile is invalid — so `city_view_go_to_grid_offset`
+frames the structure's middle rather than a corner.
 
 Cell bucketing helpers: `map_grid_offset_to_x/y(offset)`, `map_grid_offset(x,y)`,
 `map_grid_is_valid_offset`, `map_grid_width/height`. A cell's representative tile
-is its center clamped to the nearest valid grid offset; a cell that resolves to no
-valid tile is skipped.
+is the `grid_offset` of its highest-scoring qualifying building — for a population
+cell the house with the greatest `house_population`, for an industry cell the first
+industry building encountered — so the tile is always valid and lands on real
+content (no geometric-center clamping). The single bucketing pass tracks that best
+building per cell alongside the running population / industry counts.
 
 ### §C — Post-processing (identical to OpenTTD `ScanMapPOIs`)
 
@@ -116,7 +123,9 @@ Applied to the candidate buffer, in order:
 
 1. **Edge drop:** discard candidates whose tile is within `POI_EDGE_MARGIN = 20`
    tiles of any map edge.
-2. **Sort** by `score` descending.
+2. **Sort** by `score` descending. Landmarks (3–8) intentionally outrank
+   population/industry cells (≤5); lower-scored cells still surface via the random
+   sample from the top-50 pool — matching OpenTTD's pure score-sort.
 3. **Spatial dedup into a pool** (`POI_POOL_MAX = 50`): walk the sorted
    candidates; add one only if it is at least `POI_MIN_SPACING = 10` tiles
    (Chebyshev distance on tile x/y) from every candidate already in the pool.
@@ -155,6 +164,9 @@ Mirrors OpenTTD's `ACTION_JUMP_POI`.
   `#define WALLPAPER_EVENT_NEXT_POI (WALLPAPER_EVENT_CODE_BASE + 3)`.
 - **`src/platform/SDL2/augustus.c`** `SDL_USEREVENT` switch: add
   `else if (event->user.code == WALLPAPER_EVENT_NEXT_POI) { if (game_wallpaper_mode()) wallpaper_poi_next(); }`.
+  This calls `wallpaper_poi_next()` directly — deliberately **not** through the
+  `wallpaper_should_recenter()` interval gate — so the QA trigger always advances
+  immediately, regardless of the map-change interval.
 - **`SDLActivity.java`:** add constant `WALLPAPER_EVENT_NEXT_POI = 3` (kept in
   sync with android.h; `pushWallpaperEvent` already offsets by
   `WALLPAPER_EVENT_CODE_BASE`, so Java `3` → C `103`). In `SDLEngine`, register a
@@ -162,7 +174,9 @@ Mirrors OpenTTD's `ACTION_JUMP_POI`.
   whose `onReceive` calls `pushWallpaperEvent(WALLPAPER_EVENT_NEXT_POI)`. Register
   it when the engine/surface starts and unregister on
   `onSurfaceDestroyed`/`onDestroy`. On API 33+ register with
-  `Context.RECEIVER_EXPORTED` so an `adb`-sent broadcast can reach it.
+  `Context.RECEIVER_EXPORTED` so an `adb`-sent broadcast can reach it. Register
+  **only in debug builds** (`if (BuildConfig.DEBUG)`) — it is a QA-only hook and
+  release builds must not expose it.
 
 ADB command (targets the debug applicationId; the action string is
 package-qualified but distinct from it):
@@ -238,14 +252,15 @@ Land **with** the feature (the `NEXT_POI` broadcast does not exist until then).
   under-favor a category; they are centralized as named constants and tuned during
   the deferred QA pass. Not a correctness risk.
 - **Empty/sparse maps.** A scan can legitimately return zero POIs; the random-tile
-  fallback (§A step 3) covers this. Must be explicitly exercised.
+  fallback (§A step 2) covers this. Must be explicitly exercised.
 - **Cost of scanning.** `scan()` iterates all buildings once (a few thousand) plus
-  the notable-type linked lists; it runs only on load / hide / `NEXT_POI`
-  (infrequent), so per-frame cost is zero. Candidate buffer is a fixed array (no
-  per-scan allocation).
-- **Coordinate validity.** Cell centers and multi-tile origins must resolve to
-  valid grid offsets; invalid resolutions are skipped, and
-  `city_view_go_to_grid_offset` already clamps to map bounds.
+  the notable-type linked lists; it runs only on load / hide / `NEXT_POI` / list
+  wrap (all infrequent), so per-frame cost is zero. Candidate buffer is a fixed
+  array (no per-scan allocation).
+- **Coordinate validity.** Cell representative tiles are real building offsets
+  (always valid); the footprint-center shift falls back to `b->grid_offset` when
+  the shifted tile is invalid, and `city_view_go_to_grid_offset` clamps to map
+  bounds regardless.
 - **Java/native event-code drift.** `WALLPAPER_EVENT_NEXT_POI` must stay `3` in
   Java and `BASE+3` in `android.h`; documented at both sites (same convention as
   the existing three codes).
@@ -264,3 +279,30 @@ Land **with** the feature (the `NEXT_POI` broadcast does not exist until then).
 
 _None at the design layer. Exact landmark score weights, cell size, and the other
 constants in the tunables table are implementation-plan detail, tuned in QA._
+
+## Confidence Survey
+
+_All iteration-1 questions resolved (all Recommended options) and folded into the plan body — see the Reconciliation Log below. No open questions._
+
+## Reconciliation Log
+
+Append-only. Newest entry at the bottom.
+
+### Iteration 1 — 2026-07-12 (initial)
+- **Confidence:** 78% (cap from Unknowns)
+- **Resolved:** none (first pass)
+- **Still uncertain:** Unknowns dimension — scan-refresh trigger relies on an unverified `building_count()` semantic; landmark weights marked "draft/tunable"; multi-tile framing and cell-representative-tile resolution underspecified; cross-scanner score parity is an open balance decision.
+- **New questions:** Q1.1 (rescan trigger), Q1.2 (multi-tile framing), Q1.3 (cell representative tile), Q1.4 (score parity/quota), Q1.5 (empty-map rescan), Q1.6 (receiver debug-only), Q1.7 (NEXT_POI gate bypass)
+
+### Iteration 1 — 2026-07-12 (resolved)
+- **Confidence:** 91% (was 78%; cap from Unknowns lifted)
+- **Resolved:**
+  - Q1.1 → rescan on load + on full-cycle wrap (drop `building_count()` heuristic) → §A `wallpaper_poi_next()`, state struct, Risks (scanning cost)
+  - Q1.2 → center on footprint-center tile (`b->size / 2` shift, fallback to origin) → §B multi-tile note, landmark row, §A step 3
+  - Q1.3 → cell representative tile = highest-scoring building's `grid_offset` → §B cell-helpers paragraph, Risks (coordinate validity)
+  - Q1.4 → landmarks dominate via pure score-sort (no quota) → §C sort step
+  - Q1.5 → re-scan each advance while empty (self-heals) → §A step 2
+  - Q1.6 → register `NEXT_POI` receiver in debug builds only → §E SDLActivity bullet
+  - Q1.7 → `NEXT_POI` bypasses the interval gate (always advances) → §E native-handler bullet
+- **Still uncertain:** none at the tech-spec layer; remaining details (exact `b->size/2` view-space delta, log format, precise `CMakeLists` file) are implementation-plan detail.
+- **New questions:** none
