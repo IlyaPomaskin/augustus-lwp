@@ -2,6 +2,8 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+**Plan-confidence status:** Draft (iteration 1, confidence 80%)
+
 **Goal:** Replace the live wallpaper's random-tile recenter with a scored point-of-interest picker that lands the camera on interesting Caesar III locations (landmarks, dense neighborhoods, industry clusters), with an ADB `NEXT_POI` trigger for QA.
 
 **Architecture:** A new self-contained C module `src/city/wallpaper_poi.c` scans buildings once per recenter, scores candidates, spatially dedups, randomly samples 20, and cycles the camera through them via the engine's existing instant `city_view_go_to_grid_offset()`. It is invoked at the four existing recenter call sites and by a new debug-only Android broadcast bridged through the existing `pushWallpaperEvent` path.
@@ -731,3 +733,55 @@ Run on an emulator/device with the debug APK + C3 data provisioned:
 - **Spec coverage:** §A module → Task 1; §B scanners/framing → Task 1 (`landmark_score`, `is_industry`, cell pass, `footprint_center`); §C post-processing → Task 1 (`drop_edge_candidates`/`build_pool`/`sample_pool`); §D integration → Task 2 (all four sites) + CMake (Task 1); §E `NEXT_POI` → Tasks 3–4; §F QA → Task 5; tunables → Task 1 constants verbatim. No gaps.
 - **Placeholder scan:** no TBD/TODO; every code step shows complete code.
 - **Type consistency:** `wallpaper_poi_invalidate`/`wallpaper_poi_next` names identical across Tasks 1–4; `WALLPAPER_EVENT_NEXT_POI` = 3 (Java) / `BASE+3` (C); action string `com.github.Keriew.augustus.NEXT_POI` identical in Tasks 4–5; log marker `Wallpaper POI` matches `POI_MARK`.
+
+## Confidence Survey
+
+Edit checkboxes in-place to answer. Mark exactly one option per question with `[x]`. The option labeled `*(Recommended)*` is the skill's best guess given current plan + repo context — override freely.
+
+### Iteration 1 — 2026-07-12
+
+#### Q1.1. This repo has no unit-test harness, so every task gates on `cmake --build` + deferred device QA instead of a failing-test step. How should the pure scoring/selection logic (edge-drop, pool dedup, Fisher–Yates sample, chebyshev) be verified before device QA?
+- [ ] Accept compile-gate + on-device `wallpaper-qa` (`poi_cycle`, manual stepping) as the bar — matches the phase 1–3 build-only DoD; no new C test  *(Recommended)*
+- [ ] Add a small standalone C test (`test/wallpaper_poi_test.c` with its own `main()` + CMake target) exercising the pure helpers, run manually before QA
+- [ ] Add temporary `log_info` of candidate/pool/sample counts and eyeball via logcat during the QA pass, then remove
+- [ ] Extract the pure helpers to a header-only unit and stand up a proper host test target (new test infra)
+
+#### Q1.2. The `NEXT_POI` broadcast fires on the Android main thread while camera state is consumed by the SDL render thread. How should cross-thread safety be handled?
+- [ ] Keep the `pushWallpaperEvent` → `SDL_PushEvent` → event-loop bridge so the advance runs on the SDL thread (already thread-safe; matches HIDE/UPDATE_CONFIGS)  *(Recommended)*
+- [ ] Call the native camera code directly from `onReceive` (no event bridge)
+- [ ] Add a mutex around the POI module's state
+- [ ] Post to a Handler bound to the SDL thread
+
+#### Q1.3. Where should the debug broadcast receiver be registered/unregistered?
+- [ ] `onCreate` / `onDestroy` of the `WallpaperService` (plan as written) — lives exactly as long as the service  *(Recommended)*
+- [ ] `SDLEngine.onSurfaceChanged` / `onSurfaceDestroyed`
+- [ ] `onVisibilityChanged(true)` / `onVisibilityChanged(false)`
+- [ ] Manifest-declared receiver instead of a runtime one
+
+#### Q1.4. Tasks 3 (native event) and 4 (Java receiver) are split, but neither is device-testable without the other. Keep the split?
+- [ ] Keep split — Task 3 compile-gates natively, Task 4 builds the APK; each is independently reviewable  *(Recommended)*
+- [ ] Merge Tasks 3+4 into one end-to-end "NEXT_POI" task
+- [ ] Merge all Android work (Tasks 3+4+5) into one task
+- [ ] Split further (event code / handler / receiver / QA each separate)
+
+#### Q1.5. The Fisher–Yates sample calls `random_between_from_stdlib(i, pool_count - 1)` assuming an inclusive `[i, pool_count-1]` range. If the function excludes its upper bound, the last pool entry is never sampled. How to resolve?
+- [ ] Verify the function's semantics in `src/core/random.c` during Task 1 and adjust the bound if needed  *(Recommended)*
+- [ ] Assume inclusive (matches `city_view_go_to_random_tile`'s usage) and proceed
+- [ ] Replace it with an explicit `rand() % range` computation
+- [ ] Sidestep it by always shuffling the whole pool then taking the first 20
+
+#### Q1.6. The change replaces random-tile at all four sites with no runtime toggle. What is the rollback story if POI misbehaves on a device?
+- [ ] `git revert` the feature commits (no runtime flag; matches the spec's "always on, no setting")  *(Recommended)*
+- [ ] Add a hidden config key to force the old random-tile behavior
+- [ ] Guard the old call behind a compile-time `#ifdef`
+- [ ] Apply POI only to the Android HIDE site; leave the desktop FOCUS_LOST/HIDDEN sites on random-tile
+
+## Reconciliation Log
+
+Append-only. Newest entry at the bottom.
+
+### Iteration 1 — 2026-07-12 (initial)
+- **Confidence:** 80% (cap from Readiness)
+- **Resolved:** none (first pass)
+- **Still uncertain:** Readiness — the implementation-plan TDD cap (no failing-test step precedes any impl step) applies because the repo has no unit-test harness; Q1.1 decides whether that's an accepted project constraint or warrants a test. Minor Unknowns: `random_between_from_stdlib` inclusivity (Q1.5).
+- **New questions:** Q1.1 (verification approach), Q1.2 (cross-thread safety), Q1.3 (receiver lifecycle), Q1.4 (task split), Q1.5 (random bound), Q1.6 (rollback)
