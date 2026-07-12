@@ -3,6 +3,7 @@
 #include "assets/assets.h"
 #include "building/properties.h"
 #include "city/view.h"
+#include "city/wallpaper_poi.h"
 #include "core/config.h"
 #include "core/dir.h"
 #include "core/hotkey_config.h"
@@ -213,7 +214,8 @@ int game_init_wallpaper(void)
     }
     formation_set_selected(0); // a loaded save may have a legion selected; keep the map view clean
     window_city_wallpaper_show();
-    city_view_go_to_random_tile();
+    wallpaper_poi_invalidate();
+    wallpaper_poi_next();
     return 1;
 }
 

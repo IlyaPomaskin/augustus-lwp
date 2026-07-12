@@ -16,6 +16,7 @@
 #include "input/touch.h"
 #include "platform/file_manager.h"
 #include "platform/android/android.h"
+#include "city/wallpaper_poi.h"
 #include "platform/arguments.h"
 #include "platform/cursor.h"
 #include "platform/emscripten/emscripten.h"
@@ -211,7 +212,7 @@ static void handle_window_event(SDL_WindowEvent *event, int *window_active)
         case SDL_WINDOWEVENT_FOCUS_LOST:
             mouse_set_window_focus(0);
             if (game_wallpaper_mode()) {
-                city_view_go_to_random_tile();
+                wallpaper_poi_next();
             }
             break;
         case SDL_WINDOWEVENT_FOCUS_GAINED:
@@ -240,7 +241,7 @@ static void handle_window_event(SDL_WindowEvent *event, int *window_active)
             SDL_Log("Window %u hidden", (unsigned int) event->windowID);
             *window_active = 0;
             if (game_wallpaper_mode()) {
-                city_view_go_to_random_tile();
+                wallpaper_poi_next();
             }
             break;
 
@@ -407,7 +408,7 @@ static void handle_event(SDL_Event *event)
             } else if (event->user.code == WALLPAPER_EVENT_HIDE) {
                 if (game_wallpaper_mode()) {
                     if (wallpaper_should_recenter()) {
-                        city_view_go_to_random_tile();
+                        wallpaper_poi_next();
                     }
 #ifdef __ANDROID__
                     SDL_AndroidSendMessage(0x8000 + 1 /* COMMAND_PAUSE_NOW */, 0);
