@@ -4,11 +4,13 @@ import android.app.Activity;
 import android.app.AlertDialog;
 import android.app.Dialog;
 import android.app.UiModeManager;
+import android.content.BroadcastReceiver;
 import android.content.ClipboardManager;
 import android.content.ClipData;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.pm.ActivityInfo;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
@@ -52,6 +54,8 @@ import android.widget.LinearLayout;
 import android.widget.RelativeLayout;
 import android.widget.TextView;
 import android.widget.Toast;
+
+import com.github.Keriew.augustus.BuildConfig;
 
 import java.util.Hashtable;
 import java.util.Locale;
@@ -215,6 +219,38 @@ public class SDLActivity extends WallpaperService implements View.OnSystemUiVisi
     public static final int WALLPAPER_EVENT_HIDE = 0;
     public static final int WALLPAPER_EVENT_UPDATE_CONFIGS = 1;
     public static final int WALLPAPER_EVENT_RESIZE_DISPLAY = 2;
+    // Kept in sync with WALLPAPER_EVENT_NEXT_POI in src/platform/android/android.h
+    // (native adds WALLPAPER_EVENT_CODE_BASE, so 3 -> 103).
+    public static final int WALLPAPER_EVENT_NEXT_POI = 3;
+    public static final String ACTION_NEXT_POI = "com.github.Keriew.augustus.NEXT_POI";
+
+    private BroadcastReceiver mPoiReceiver;
+
+    private void registerPoiReceiver() {
+        if (!BuildConfig.DEBUG || mPoiReceiver != null) {
+            return; // QA-only hook; never exposed in release builds
+        }
+        mPoiReceiver = new BroadcastReceiver() {
+            @Override
+            public void onReceive(Context context, Intent intent) {
+                Log.v(TAG, "NEXT_POI broadcast received");
+                pushWallpaperEvent(WALLPAPER_EVENT_NEXT_POI);
+            }
+        };
+        IntentFilter filter = new IntentFilter(ACTION_NEXT_POI);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(mPoiReceiver, filter, Context.RECEIVER_EXPORTED);
+        } else {
+            registerReceiver(mPoiReceiver, filter);
+        }
+    }
+
+    private void unregisterPoiReceiver() {
+        if (mPoiReceiver != null) {
+            unregisterReceiver(mPoiReceiver);
+            mPoiReceiver = null;
+        }
+    }
 
     // Live-wallpaper pause state. When the wallpaper is hidden, native posts COMMAND_PAUSE_NOW back
     // to Java (see augustus.c WALLPAPER_EVENT_HIDE handler); onUnhandledMessage() then pauses the SDL
@@ -352,6 +388,7 @@ public class SDLActivity extends WallpaperService implements View.OnSystemUiVisi
         Log.v(TAG, "Model: " + Build.MODEL);
         Log.v(TAG, "onCreate()");
         super.onCreate();
+        registerPoiReceiver();
 
         try {
             Thread.currentThread().setName("SDLActivity");
@@ -514,6 +551,7 @@ public class SDLActivity extends WallpaperService implements View.OnSystemUiVisi
     @Override
     public void onDestroy() {
         Log.v(TAG, "onDestroy()");
+        unregisterPoiReceiver();
 
         if (mHIDDeviceManager != null) {
             HIDDeviceManager.release(mHIDDeviceManager);
