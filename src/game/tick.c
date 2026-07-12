@@ -82,7 +82,9 @@ static void advance_month(void)
 {
     city_migration_reset_newcomers();
     city_health_update();
-    scenario_random_event_process();
+    if (!game_wallpaper_mode()) {
+        scenario_random_event_process();
+    }
     city_finance_handle_month_change();
     city_resource_consume_food();
     scenario_distant_battle_process();
@@ -214,8 +216,10 @@ void game_tick_run(void)
     game_undo_reduce_time_available();
     advance_tick();
     figure_action_handle();
-    scenario_earthquake_process();
-    scenario_gladiator_revolt_process();
+    if (!game_wallpaper_mode()) {
+        scenario_earthquake_process();
+        scenario_gladiator_revolt_process();
+    }
     scenario_emperor_change_process();
     city_victory_check();
 }
