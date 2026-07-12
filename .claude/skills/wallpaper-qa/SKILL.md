@@ -1,6 +1,6 @@
 ---
 name: augustus-wallpaper-qa
-description: Use when testing or reproducing behavior of the Augustus Android live wallpaper on a device/emulator — verifying it renders, that Scale/Brightness/Speed/Map-change settings apply, camera recenter on hide, pause-when-hidden, or triggering the set-wallpaper flow from adb.
+description: Use when testing or reproducing behavior of the Augustus Android live wallpaper on a device/emulator — verifying it renders, that Scale/Brightness/Speed/Map-change settings apply, camera recenter on hide, pause-when-hidden, or triggering the set-wallpaper flow from adb, stepping the point-of-interest camera via next_poi (ADB NEXT_POI broadcast)
 ---
 
 # Augustus Wallpaper QA
@@ -35,6 +35,7 @@ the debug APK installed, and C3 data in `files/c3` (use `.install()` / `.provisi
 | Visibility | `hide()`, `show()`, `lock()`, `unlock()`, `wait(s)` |
 | Observe | `logcat_clear()`, `screenshot(name)`, `save_log(name, grep?)` |
 | Assert | `assert_set()`, `assert_recentered(n)`, `assert_not_recentered()`, `assert_paused()`, `recenter_count()` |
+| POI | `next_poi(n)`, `poi_count()`, `assert_poi_changed(n)` |
 
 Settings apply on the next **visibility cycle** (`UPDATE_CONFIGS`), so a flow that
 changes a setting must `set_wallpaper()` (or already be set) then `hide().show()`
@@ -70,6 +71,9 @@ python3 wallpaper_qa.py run scale_dim        # one scenario
 python3 wallpaper_qa.py run all              # the whole sweep
 # ad-hoc flow from atomic ops (op:arg / op:k=v,k=v):
 python3 wallpaper_qa.py op kill set:scale=2,brightness=70 set_wallpaper show screenshot:adhoc
+# jump to the next point of interest (debug build only):
+adb shell am broadcast -a com.github.Keriew.augustus.NEXT_POI -p com.github.Keriew.augustus.debug
+python3 wallpaper_qa.py run poi_cycle   # step through POIs + screenshot
 ```
 
 Artifacts (screenshots, logs) land in `./qa_out/`. Assertions raise, so a broken

@@ -60,6 +60,7 @@ SETTINGS = {
 }
 RECENTER_MARK = "recenter to grid offset"
 PAUSE_MARK = "nativePause()"
+POI_MARK = "Wallpaper POI"
 
 
 class Wallpaper:
@@ -194,6 +195,14 @@ class Wallpaper:
         time.sleep(2)
         return self._log("unlocked")
 
+    def next_poi(self, n=1):
+        """Advance to the next point of interest via the debug ADB broadcast."""
+        for _ in range(n):
+            self._adb("shell", "am", "broadcast",
+                      "-a", "com.github.Keriew.augustus.NEXT_POI", "-p", PKG)
+            time.sleep(1)
+        return self._log(f"next_poi x{n}")
+
     def wait(self, seconds):
         time.sleep(seconds)
         return self._log(f"waited {seconds}s")
@@ -235,6 +244,15 @@ class Wallpaper:
         if n < at_least:
             raise AssertionError(f"expected >= {at_least} recenters, saw {n}")
         return self._log(f"assert_recentered OK ({n} >= {at_least})")
+
+    def poi_count(self):
+        return self._sh("logcat -d").count(POI_MARK)
+
+    def assert_poi_changed(self, at_least=1):
+        n = self.poi_count()
+        if n < at_least:
+            raise AssertionError(f"expected >= {at_least} POI jumps, saw {n}")
+        return self._log(f"assert_poi_changed OK ({n} >= {at_least})")
 
     def assert_not_recentered(self):
         n = self.recenter_count()
@@ -296,6 +314,12 @@ def scenario_pause_when_hidden(w):
     w.kill().set_wallpaper().assert_set().show().logcat_clear() \
         .hide().wait(2).assert_paused().save_log("pause_when_hidden")
 
+def scenario_poi_cycle(w):
+    w.kill().set_wallpaper().assert_set().show().wait(2).logcat_clear() \
+        .next_poi().screenshot("poi_1") \
+        .next_poi().screenshot("poi_2") \
+        .assert_poi_changed(2)
+
 SCENARIOS = {
     "default": scenario_default,
     "scale_dim": scenario_scale_dim,
@@ -303,6 +327,7 @@ SCENARIOS = {
     "recenter_every_switch": scenario_recenter_every_switch,
     "recenter_interval": scenario_recenter_interval,
     "pause_when_hidden": scenario_pause_when_hidden,
+    "poi_cycle": scenario_poi_cycle,
 }
 
 
