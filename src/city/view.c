@@ -626,7 +626,9 @@ static void set_viewport_wallpaper(void)
 
 void city_view_set_scale(int scale)
 {
-    scale = calc_bound(scale, 50, city_view_get_max_scale());
+    // wallpaper mode allows zooming in past the normal 2x cap (down to scale 20 = 5x)
+    int min_scale = game_wallpaper_mode() ? 20 : 50;
+    scale = calc_bound(scale, min_scale, city_view_get_max_scale());
     data.scale = scale;
     if (game_wallpaper_mode()) {
         set_viewport_wallpaper();

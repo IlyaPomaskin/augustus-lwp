@@ -420,8 +420,9 @@ static void handle_event(SDL_Event *event)
                     config_load(); // re-read augustus.ini edited by the settings screen
                     int scale_multiplier = config_get(CONFIG_UI_WALLPAPER_SCALE);
                     if (scale_multiplier > 0) {
-                        // dropdown x1..x5 -> city-view scale percent (100..500), clamped by city_view_set_scale
-                        city_view_set_scale(scale_multiplier * 100);
+                        // dropdown xN = N times bigger; magnification ~ 100/scale, so
+                        // x1..x5 -> scale 100/50/33/25/20 (lower % = more zoomed in)
+                        city_view_set_scale(100 / scale_multiplier);
                     }
                     int speed = config_get(CONFIG_UI_WALLPAPER_SPEED);
                     if (speed > 0) {
