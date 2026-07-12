@@ -28,18 +28,17 @@
     </string-array>
 
     <string-array name="scale_options">
+        <item>x0.5</item>
         <item>x1</item>
+        <item>x1.5</item>
         <item>x2</item>
+        <item>x2.5</item>
         <item>x3</item>
-        <item>x4</item>
-        <item>x5</item>
     </string-array>
 
     <string-array name="speed_options">
-        <item>50%</item>
         <item>75%</item>
         <item>100%</item>
         <item>125%</item>
-        <item>150%</item>
     </string-array>
 </resources>

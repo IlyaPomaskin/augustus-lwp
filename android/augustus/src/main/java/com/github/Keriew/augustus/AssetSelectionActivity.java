@@ -73,10 +73,11 @@ public class AssetSelectionActivity extends AppCompatActivity {
     private static final int MAP_CHANGE_DEFAULT_MINUTES = 0;
     private static final int[] MAP_CHANGE_INTERVAL_MINUTES = {0, 10, 30, 120, 1440};
     // Scale dropdown x1..x5; native multiplies by 100 to get the city-view scale percent.
-    private static final int[] SCALE_MULTIPLIERS = {1, 2, 3, 4, 5};
-    private static final int SCALE_DEFAULT_MULTIPLIER = 1;
+    // scale dropdown x0.5..x3 -> city-view scale percent (magnification ~= 100/scale)
+    private static final int[] SCALE_PERCENTS = {200, 100, 67, 50, 40, 33};
+    private static final int SCALE_DEFAULT_PERCENT = 100;
     // Simulation-speed dropdown: game-speed percent passed straight to setting_set_game_speed.
-    private static final int[] SPEED_PERCENTS = {50, 75, 100, 125, 150};
+    private static final int[] SPEED_PERCENTS = {75, 100, 125};
     private static final int SPEED_DEFAULT_PERCENT = 100;
 
     private static final String SDL_ACTIVITY_CLASS_NAME = "org.libsdl.app.SDLActivity";
@@ -119,8 +120,8 @@ public class AssetSelectionActivity extends AppCompatActivity {
     }
 
     private void setupSettingsControls() {
-        setupChoiceSpinner(R.id.scale_spinner, R.array.scale_options, SCALE_MULTIPLIERS,
-                K_SCALE, SCALE_DEFAULT_MULTIPLIER);
+        setupChoiceSpinner(R.id.scale_spinner, R.array.scale_options, SCALE_PERCENTS,
+                K_SCALE, SCALE_DEFAULT_PERCENT);
 
         SeekBar brightnessBar = findViewById(R.id.brightness_bar);
         brightnessBar.setMax(BRIGHTNESS_MAX);
