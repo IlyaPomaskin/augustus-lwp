@@ -58,7 +58,7 @@ static void load_default_settings(void)
     data.game_speed = 90;
     data.scroll_speed = 70;
 
-    data.difficulty = DIFFICULTY_NORMAL;
+    data.difficulty = DIFFICULTY_VERY_EASY;
     data.tooltips = TOOLTIPS_FULL;
     data.warnings = 1;
     data.gods_enabled = 1;
